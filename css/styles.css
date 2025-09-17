@@ -1,0 +1,340 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background-color: #23262f;
+  color: #f1f1f1;
+  touch-action: manipulation;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* remove page scrollbar */
+  overscroll-behavior: none;
+}
+.screen {
+  display: none;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+#main-screen {
+  flex: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #23262f;
+  color: #f1f1f1;
+}
+button {
+  padding: 15px 30px;
+  font-size: 20px;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  color: #f1f1f1;
+  background-color: #353945;
+  margin: 10px;
+  transition: background 0.2s;
+}
+button:disabled {
+  background-color: #444950;
+  cursor: not-allowed;
+  color: #888;
+}
+#login-popup {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(24, 26, 32, 0.95);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.popup-content {
+  background-color: #23262f;
+  padding: 30px;
+  border-radius: 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+input[type="tel"],
+input[type="email"],
+input[type="password"] {
+  padding: 10px;
+  font-size: 24px;
+  width: 250px;
+  text-align: center;
+  margin-bottom: 20px;
+  border: 2px solid #353945;
+  border-radius: 5px;
+  background: #181a20;
+  color: #f1f1f1;
+}
+input[type="tel"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder {
+  color: #888;
+}
+.message {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 40px 0;
+  color: #f1f1f1;
+}
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 20px;
+}
+.keypad button {
+  width: 80%;
+  height: 60px;
+  font-size: 24px;
+  justify-content: center;
+  background-color: #353945;
+  color: #f1f1f1;
+  border: 1px solid #444950;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+.keypad button:active {
+  background-color: #555b6a;
+}
+#login-submit {
+  margin-top: 20px;
+  width: 250px;
+  background-color: #3772ff;
+  color: #fff;
+  padding: 15px;
+  font-size: 20px;
+  border-radius: 8px;
+  border: none;
+  transition: background 0.2s;
+}
+#login-submit:active {
+  background-color: #2656c7;
+}
+#stop-button {
+  background-color: #ff4d4f !important;
+}
+#return-home {
+  background-color: #353945;
+}
+#admin-login-btn {
+  background-color: #23262f;
+  color: #f1f1f1;
+  border: 1px solid #353945;
+}
+#admin-login-btn:active {
+  background-color: #353945;
+}
+#end-screen {
+  background-color: #23262f;
+  color: #f1f1f1;
+}
+h1,
+h2,
+h3 {
+  color: #f1f1f1;
+}
+.main-left {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 40px 0 40px 40px;
+}
+
+.petmon-title {
+  font-size: 60px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #fff;
+}
+.center-title {
+  font-size: 20px;
+  font-weight: normal;
+  margin-left: 12px;
+  color: #b5b5b5;
+}
+.main-guide-title {
+  font-size: 24px;
+  margin: 40px 0 12px 0;
+  color: #fff;
+}
+.main-guide {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+.guide-step {
+  background: #3772ff;
+  color: #fff;
+  border-radius: 12px;
+  padding: 18px 14px;
+  width: 180px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  align-items: center;
+}
+.step-title {
+  font-size: 25px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.step-desc {
+  font-size: 15px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.guide-img {
+  width: 60px;
+  height: 60px;
+  margin-top: auto;
+}
+.main-start-img {
+  background: linear-gradient(0, #0049f3, #7f53ac);
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  border-radius: 30px;
+  padding: 18px 60px;
+  margin-top: 30px;
+  margin-left: 10px;
+  margin-bottom: 0;
+}
+.main-start-btn {
+  background: linear-gradient(0, #3772ff, #7f53ac);
+  color: #fff;
+  width: 98%;
+  font-size: 28px;
+  font-weight: bold;
+  border-radius: 30px;
+  padding: 18px 60px;
+  margin-top: 30px;
+  margin-left: 10px;
+  margin-bottom: 0;
+}
+.main-date {
+  margin-top: 40px;
+  font-size: 20px;
+  color: #fff;
+  text-align: right;
+}
+.process-box {
+  background: #23262f;
+  border-radius: 18px;
+  padding: 48px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.process-message {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 40px;
+  color: #fff;
+}
+#stop-button {
+  background-color: #ff4d4f !important;
+  font-size: 22px;
+  padding: 16px 40px;
+}
+.end-box {
+  background: #23262f;
+  border-radius: 18px;
+  padding: 48px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#end-screen h2 {
+  font-size: 30px;
+  margin-bottom: 18px;
+}
+#end-countdown {
+  font-size: 20px;
+  margin-bottom: 30px;
+}
+.end-btns {
+  display: flex;
+  gap: 20px;
+}
+#return-home,
+#add-more-button {
+  font-size: 20px;
+  padding: 14px 36px;
+  border-radius: 10px;
+  background: #353945;
+  color: #fff;
+}
+#return-home:active,
+#add-more-button:active {
+  background: #3772ff;
+}
+.guide-svg-bottom {
+  margin-top: 50px;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.guide-svg {
+  width: 60px;
+  height: 60px;
+
+  margin-bottom: 0;
+  display: block;
+}
+#admin-time {
+  font-size: 24px;
+  color: #fff;
+  letter-spacing: 1px;
+  white-space: pre-line;
+  flex-shrink: 0;
+  font-weight: bold;
+  text-align: right;
+}
+#status-screen {
+  flex: none;
+  width: 260px;
+  height: auto;
+  background-color: #23262f;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#arduino-status {
+  font-size: 16px;
+  margin-top: 8px;
+  color: #fff;
+  text-align: center;
+}
+
+.status-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}

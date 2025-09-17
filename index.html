@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PETMON Machine</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <!-- 메인 화면과 상태 표시 -->
+    <div style="display: flex; width: 100%">
+      <!-- 메인 화면 -->
+      <div id="main-screen" class="screen" style="flex: 3">
+        <div class="main-left">
+          <h1 class="petmon-title">
+            PETMON <span class="center-title">Beta v1.1</span>
+          </h1>
+          <h2 class="main-guide-title">페트몬 이용 방법</h2>
+          <div class="main-guide">
+            <div class="guide-step">
+              <div class="step-title">1. 시작하기</div>
+              <div class="step-desc">화면의 시작하기 버튼을 눌러주세요.</div>
+              <div class="main-start-img">시작하기</div>
+            </div>
+            <div class="guide-step">
+              <div class="step-title">2. 로그인</div>
+              <div class="step-desc">
+                핸드폰 번호를 입력하고 회원 정보 확인 후 로그인하세요.
+              </div>
+              <!-- 키패드 SVG -->
+              <svg
+                class="guide-svg"
+                viewBox="0 0 64 64"
+                fill="none"
+                style="width: 80px; height: 80px"
+              >
+                <rect x="12" y="8" width="40" height="48" rx="6" fill="#fff" />
+                <rect
+                  x="20"
+                  y="16"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="28"
+                  y="16"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="36"
+                  y="16"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="20"
+                  y="24"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="28"
+                  y="24"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="36"
+                  y="24"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="20"
+                  y="32"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="28"
+                  y="32"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="36"
+                  y="32"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+                <rect
+                  x="28"
+                  y="40"
+                  width="8"
+                  height="8"
+                  rx="4"
+                  fill="#3772ff"
+                />
+              </svg>
+            </div>
+            <div class="guide-step">
+              <div class="step-title">3. 뚜껑 투입하기</div>
+              <div class="step-desc">병뚜껑 투입구에 병뚜껑을 넣어주세요.</div>
+            </div>
+            <div class="guide-step">
+              <div class="step-title">4. 띠 분리하기 및 투입하기</div>
+              <div class="step-desc">
+                페트병의 입구 부분을 띠 분리기에 넣어주세요. 문이 열리면
+                투입해주세요.
+              </div>
+            </div>
+            <div id="status-host-main">
+              <div id="status-section" class="status-section">
+                <div
+                  id="status-screen"
+                  style="
+                    width: 260px;
+                    height: 150px;
+                    background: linear-gradient(0, #3772ff, #7f53ac);
+
+                    padding: 16px;
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                  "
+                >
+                  <h2 style="font-size: 25px; margin: 0; text-align: center">
+                    가동 상태
+                  </h2>
+                  <div
+                    id="arduino-status"
+                    style="
+                      font-size: 30px;
+                      margin-top: 8px;
+                      text-align: center;
+                      font-weight: bold;
+                      color: #ffff00;
+                    "
+                  >
+                    상태 확인 중...
+                  </div>
+                </div>
+                <div
+                  id="status-screen"
+                  style="
+                    width: 260px;
+                    height: 208px;
+                    background: linear-gradient(0, #7f53ac, #3772ff);
+                    background-color: #000;
+                    padding: 16px;
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 10px;
+                  "
+                >
+                  <h2
+                    style="
+                      font-size: 25px;
+                      margin: 0;
+                      text-align: center;
+                      font-weight: bold;
+                      color: #fff;
+                    "
+                  >
+                    투명 페트병 투입
+                  </h2>
+                  <div
+                    id="machine-status"
+                    style="
+                      font-size: 30px;
+                      margin-top: 8px;
+                      text-align: center;
+                      font-weight: bold;
+                      color: #00ff4c;
+                    "
+                  >
+                    가능
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button id="login-button" class="main-start-btn">시작하기</button>
+        </div>
+      </div>
+
+      <!-- 상태 표시 -->
+    </div>
+
+    <!-- 프로세스 화면 -->
+    <div id="process-screen" class="screen">
+      <div
+        class="process-layout"
+        style="
+          display: flex;
+          width: 100%;
+          justify-content: center;
+          align-items: center;
+          gap: 32px;
+          padding: 0 24px;
+          box-sizing: border-box;
+        "
+      >
+        <div class="process-box">
+          <div class="process-message" id="process-message"></div>
+          <button id="stop-button" disabled>종료하기</button>
+        </div>
+        <div
+          id="status-host-process"
+          style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+          "
+        ></div>
+      </div>
+    </div>
+
+    <!-- 종료 화면 -->
+    <div id="end-screen" class="screen">
+      <div class="end-box">
+        <h2>자원순환에 동참해주셔서 감사합니다 ✅</h2>
+        <p id="end-countdown">10초 뒤 자동으로 처음 화면으로 돌아갑니다.</p>
+        <div class="end-btns">
+          <button id="return-home">처음으로 돌아가기</button>
+          <button id="add-more-button">추가투입</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 로그인 팝업 -->
+    <div id="login-popup">
+      <div class="popup-content">
+        <h2>전화번호를 입력하세요</h2>
+        <input
+          type="tel"
+          id="phone-number"
+          maxlength="13"
+          placeholder="010-1234-5678"
+        />
+        <div class="keypad">
+          <button>1</button>
+          <button>2</button>
+          <button>3</button>
+          <button>4</button>
+          <button>5</button>
+          <button>6</button>
+          <button>7</button>
+          <button>8</button>
+          <button>9</button>
+          <button class="key-del">←</button>
+          <button>0</button>
+          <button class="key-clear">C</button>
+        </div>
+        <button id="login-submit">다음</button>
+      </div>
+    </div>
+
+    <div
+      style="
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex;
+        align-items: flex-end;
+        flex-direction: row-reverse;
+        gap: 16px;
+        width: 260px;
+        justify-content: flex-end;
+        text-align: right;
+      "
+    >
+      <span id="admin-time"></span>
+    </div>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script type="module" src="./src/index.js"></script>
+    <script src="./src/statusCheck.js"></script>
+    <script src="./src/time.js"></script>
+  </body>
+</html>
