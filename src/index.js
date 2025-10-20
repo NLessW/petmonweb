@@ -1170,7 +1170,7 @@ function handleInactivity() {
     inactivityTimeout = setTimeout(() => {
         // end-screen의 귀가 로직과 동일한 흐름으로 종료
         beginGracefulAutoExit();
-    }, 15000); // 3분(180000ms). 테스트 중엔 15초
+    }, 180000); // 3분(180000ms). 테스트 중엔 15초
 }
 
 // 종료하기 버튼 로직 수정 (포인트 적립 제거)
