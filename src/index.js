@@ -40,8 +40,8 @@ let errorAutoTimer;
 let errorCountdownTimer;
 // 테스트 모드 상태
 let __testMode = false;
-let __simQueue = [];
-let __simPaused = false;
+// [ADD] Show error screen only once per session
+let __errorShownOnce = false;
 
 function updateTestBadge() {
     const b = document.getElementById('test-mode-badge');
@@ -804,6 +804,14 @@ function showScreen(screenId) {
 
     // 메인화면으로 돌아갈 때 아두이노에 'X' 신호 전송 및 세션 초기화
     if (screenId === 'main-screen') {
+        // [ADD] clear any leftover error timers
+        try {
+            clearTimeout(errorAutoTimer);
+        } catch {}
+        try {
+            clearInterval(errorCountdownTimer);
+        } catch {}
+
         try {
             clearInterval(__closeBtnUnlockTimer);
             __closeBtnUnlockTimer = null;
@@ -841,6 +849,10 @@ function showScreen(screenId) {
 
 // 오류 화면 표시 및 점검 모드 전환
 function showErrorScreen(message) {
+    // [ADD] prevent repeated error screen
+    if (__errorShownOnce) return;
+    __errorShownOnce = true;
+
     try {
         clearTimeout(errorAutoTimer);
         clearInterval(errorCountdownTimer);

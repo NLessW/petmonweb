@@ -207,7 +207,7 @@
                 <h2 style="margin-top: 0">장비 연결</h2>
                 <div class="inline">
                     <button id="btn-connect">장비 연결</button>
-                    <button id="btn-login" disabled>장비 로그인(99)</button>
+                    <button id="btn-login" disabled>장비 로그인(98)</button>
                     <button id="btn-query" disabled>속도 조회(Q)</button>
                     <button id="btn-help" disabled>도움말(h)</button>
                     <button id="btn-logout" class="secondary" disabled>로그아웃(L)</button>
@@ -224,8 +224,15 @@
                     <div class="speed-field">
                         <label>문 열기 속도 (DO)</label>
                         <div class="pair">
-                            <input type="range" id="speed-do-range" min="0" max="255" value="255" />
-                            <input type="number" id="speed-do" min="0" max="255" value="255" />
+                            <input
+                                type="number"
+                                id="speed-do"
+                                min="0"
+                                max="255"
+                                value="0"
+                                placeholder="EEPROM 로딩 중..."
+                            />
+                            <input type="range" id="speed-do-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
                             <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-1">
@@ -239,8 +246,15 @@
                     <div class="speed-field">
                         <label>문 닫기 속도 (DC)</label>
                         <div class="pair">
-                            <input type="range" id="speed-dc-range" min="0" max="255" value="120" />
-                            <input type="number" id="speed-dc" min="0" max="255" value="120" />
+                            <input
+                                type="number"
+                                id="speed-dc"
+                                min="0"
+                                max="255"
+                                value="0"
+                                placeholder="EEPROM 로딩 중..."
+                            />
+                            <input type="range" id="speed-dc-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
                             <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-1">
@@ -254,8 +268,15 @@
                     <div class="speed-field">
                         <label>24V 방향1 (D1)</label>
                         <div class="pair">
-                            <input type="range" id="speed-d1-range" min="0" max="255" value="70" />
-                            <input type="number" id="speed-d1" min="0" max="255" value="70" />
+                            <input
+                                type="number"
+                                id="speed-d1"
+                                min="0"
+                                max="255"
+                                value="0"
+                                placeholder="EEPROM 로딩 중..."
+                            />
+                            <input type="range" id="speed-d1-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
                             <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-1">
@@ -269,8 +290,15 @@
                     <div class="speed-field">
                         <label>24V 방향2 (D2)</label>
                         <div class="pair">
-                            <input type="range" id="speed-d2-range" min="0" max="255" value="59" />
-                            <input type="number" id="speed-d2" min="0" max="255" value="59" />
+                            <input
+                                type="number"
+                                id="speed-d2"
+                                min="0"
+                                max="255"
+                                value="0"
+                                placeholder="EEPROM 로딩 중..."
+                            />
+                            <input type="range" id="speed-d2-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
                             <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-1">
