@@ -335,7 +335,7 @@ function isStepButton(el) {
     return el && el.classList && el.classList.contains('step-btn-small');
 }
 
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('click', (e) => {
     if (e.button !== 0) return; // 좌클릭만
     const btn = e.target.closest('.step-btn-small');
     if (!isStepButton(btn)) return;
