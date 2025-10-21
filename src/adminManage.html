@@ -4,194 +4,7 @@
         <meta charset="UTF-8" />
         <title>관리자 - 모터 제어</title>
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <link rel="stylesheet" href="../css/styles.css" />
-        <style>
-            body {
-                font-family: system-ui, sans-serif;
-                background: #111;
-                color: #eee;
-                margin: 0;
-            }
-            header {
-                padding: 16px 24px;
-                background: #1d2330;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            main {
-                max-width: 1100px;
-                margin: 0 auto;
-                padding: 32px 24px 80px;
-            }
-            section {
-                background: #1d2330;
-                border: 1px solid #2d3748;
-                border-radius: 12px;
-                padding: 24px;
-                margin-bottom: 32px;
-            }
-            h1 {
-                font-size: 1.6rem;
-                margin: 0;
-            }
-            label {
-                display: block;
-                font-size: 0.85rem;
-                letter-spacing: 0.5px;
-                margin-bottom: 4px;
-                opacity: 0.8;
-            }
-            input[type='number'] {
-                width: 90px;
-                padding: 6px 8px;
-                border: 1px solid #334155;
-                border-radius: 6px;
-                background: #0f1622;
-                color: #eee;
-            }
-            button {
-                cursor: pointer;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 18px;
-                background: #3772ff;
-                color: #fff;
-                font-weight: 600;
-                font-size: 0.9rem;
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-            }
-            button.secondary {
-                background: #2d3748;
-                color: #fff;
-            }
-            button.danger {
-                background: #ff4d4d;
-            }
-            button:disabled {
-                opacity: 0.4;
-                cursor: not-allowed;
-            }
-            .grid {
-                display: grid;
-                gap: 16px;
-            }
-            .grid.cols-4 {
-                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            }
-            .inline {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 12px;
-                align-items: flex-end;
-            }
-            .small {
-                font-size: 0.75rem;
-                opacity: 0.6;
-            }
-            pre {
-                background: #0f1622;
-                padding: 16px;
-                border-radius: 8px;
-                font-size: 0.75rem;
-                max-height: 240px;
-                overflow: auto;
-            }
-            .badge {
-                background: #2d3748;
-                padding: 2px 8px;
-                border-radius: 999px;
-                font-size: 0.65rem;
-                font-weight: 600;
-                letter-spacing: 0.5px;
-            }
-            .flex {
-                display: flex;
-                gap: 32px;
-                flex-wrap: wrap;
-            }
-            .card {
-                flex: 1 1 320px;
-            }
-            .separator {
-                height: 1px;
-                background: #2d3748;
-                margin: 24px 0;
-            }
-            .status-dot {
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                background: #ff4d4d;
-                display: inline-block;
-                margin-right: 6px;
-                box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
-            }
-            .status-dot.on {
-                background: #18c964;
-            }
-            .table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 0.8rem;
-            }
-            .table th,
-            .table td {
-                border: 1px solid #2d3748;
-                padding: 6px 8px;
-                text-align: left;
-            }
-            .table th {
-                background: #253041;
-            }
-            fieldset {
-                border: 1px solid #2d3748;
-                border-radius: 10px;
-                padding: 16px 16px 8px;
-            }
-            legend {
-                padding: 0 8px;
-                font-size: 0.8rem;
-                letter-spacing: 0.5px;
-            }
-            .adjust-row {
-                margin-top: 6px;
-                display: flex;
-                gap: 8px;
-            }
-            .step-btn-small {
-                background: #253041;
-                border: 1px solid #334155;
-                color: #eee;
-                width: 32px;
-                height: 30px;
-                padding: 0;
-                font-weight: 600;
-                font-size: 0.9rem;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 6px;
-                cursor: pointer;
-                user-select: none;
-            }
-            .step-btn-small:active {
-                background: #374357;
-            }
-            /* 페이지/로그 스크롤 수정 */
-            html,
-            body {
-                height: auto !important;
-                overflow-y: auto !important;
-            }
-            #log {
-                max-height: 45vh; /* 화면의 45% 높이까지만 */
-                overflow: auto; /* 로그 내부 스크롤 */
-                overscroll-behavior: contain;
-            }
-        </style>
+        <link rel="stylesheet" href="../css/adminstyles.css" />
     </head>
     <body>
         <header>
@@ -207,10 +20,10 @@
                 <h2 style="margin-top: 0">장비 연결</h2>
                 <div class="inline">
                     <button id="btn-connect">장비 연결</button>
-                    <button id="btn-login" disabled>장비 로그인(98)</button>
-                    <button id="btn-query" disabled>속도 조회(Q)</button>
-                    <button id="btn-help" disabled>도움말(h)</button>
-                    <button id="btn-logout" class="secondary" disabled>로그아웃(L)</button>
+                    <button id="btn-login" disabled>장비 로그인</button>
+                    <button id="btn-query" disabled>속도 조회</button>
+                    <button id="btn-help" disabled>도움말</button>
+                    <button id="btn-logout" class="secondary" disabled>로그아웃</button>
                     <button id="btn-go-main" class="secondary" style="background: #444" title="속도 저장 후 메인으로">
                         메인으로
                     </button>
@@ -235,12 +48,16 @@
                             <input type="range" id="speed-do-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
+                            <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-10">
+                                -10
+                            </button>
                             <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-1">
                                 -
                             </button>
                             <button type="button" class="step-btn-small" data-target="speed-do" data-delta="1">
                                 +
                             </button>
+                            <button class="step-btn-small" data-target="speed-do" data-delta="10">+10</button>
                         </div>
                     </div>
                     <div class="speed-field">
@@ -257,12 +74,16 @@
                             <input type="range" id="speed-dc-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
+                            <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-10">
+                                -10
+                            </button>
                             <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-1">
                                 -
                             </button>
                             <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="1">
                                 +
                             </button>
+                            <button class="step-btn-small" data-target="speed-dc" data-delta="10">+10</button>
                         </div>
                     </div>
                     <div class="speed-field">
@@ -279,12 +100,16 @@
                             <input type="range" id="speed-d1-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
+                            <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-10">
+                                -10
+                            </button>
                             <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-1">
                                 -
                             </button>
                             <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="1">
                                 +
                             </button>
+                            <button class="step-btn-small" data-target="speed-d1" data-delta="10">+10</button>
                         </div>
                     </div>
                     <div class="speed-field">
@@ -301,22 +126,25 @@
                             <input type="range" id="speed-d2-range" min="0" max="255" value="0" />
                         </div>
                         <div class="adjust-row">
+                            <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-10">
+                                -10
+                            </button>
                             <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-1">
                                 -
                             </button>
                             <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="1">
                                 +
                             </button>
+                            <button class="step-btn-small" data-target="speed-d2" data-delta="10">+10</button>
                         </div>
                     </div>
                 </form>
                 <div class="inline" style="margin-top: 12px">
                     <button id="btn-refresh-speed" class="secondary" disabled>현재값 동기화(Q)</button>
                     <span class="small" id="auto-speed-msg" style="line-height: 1.4"
-                        >입력값 변경 후 약 0.5초 뒤 자동 전송됩니다.</span
+                        >입력값 변경 후 약 0.1초 뒤 자동 전송됩니다.</span
                     >
                 </div>
-                <div class="small" style="margin-top: 8px">SPD:DO=255;DC=120;D1=70;D2=59 형태로 아두이노 전송</div>
             </section>
 
             <section>
@@ -331,65 +159,141 @@
                     <button data-cmd="X" class="quick danger" disabled>긴급 정지 (X)</button>
                 </div>
             </section>
-
-            <section>
-                <h2 style="margin-top: 0">수동 모터 제어 (Manual)</h2>
-                <fieldset style="margin-bottom: 16px">
-                    <legend>24V 메인 모터</legend>
-                    <div class="inline">
-                        <div class="pair compact">
-                            <input type="range" id="m24-speed-range" min="0" max="255" value="80" />
-                            <input type="number" id="m24-speed" min="0" max="255" value="80" />
-                        </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="m24-speed" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="m24-speed" data-delta="1">
-                                +
-                            </button>
-                        </div>
-                        <button data-m="M:D24:F" disabled>정방향</button>
-                        <button data-m="M:D24:R" disabled>역방향</button>
-                        <button data-m="M:D24:S" class="secondary" disabled>정지</button>
-                    </div>
-                </fieldset>
-                <fieldset style="margin-bottom: 16px">
-                    <legend>12V 도어 모터</legend>
-                    <div class="inline">
-                        <div class="pair compact">
-                            <input type="range" id="m12-speed-range" min="0" max="255" value="180" />
-                            <input type="number" id="m12-speed" min="0" max="255" value="180" />
-                        </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="m12-speed" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="m12-speed" data-delta="1">
-                                +
-                            </button>
-                        </div>
-                        <button data-m="M:D12:F" disabled>정방향</button>
-                        <button data-m="M:D12:R" disabled>역방향</button>
-                        <button data-m="M:D12:S" class="secondary" disabled>정지</button>
-                    </div>
-                </fieldset>
-                <fieldset>
-                    <legend>인버터</legend>
-                    <div class="inline">
-                        <button data-m="M:INV:F" disabled>정방향 ON</button>
-                        <button data-m="M:INV:R" disabled>역방향 ON</button>
-                        <button data-m="M:INV:S" class="secondary" disabled>OFF</button>
-                    </div>
-                </fieldset>
-            </section>
-
-            <section>
-                <h2 style="margin-top: 0">시리얼 로그</h2>
-                <pre id="log"></pre>
-            </section>
         </main>
+
+        <!-- 플로팅 로그 창 -->
+        <div id="log-container">
+            <div id="log-header">
+                <h3>시리얼 로그</h3>
+                <div id="log-controls">
+                    <div id="log-font-size">
+                        <button id="btn-font-smaller" title="글자 작게">A-</button>
+                        <button id="btn-font-larger" title="글자 크게">A+</button>
+                    </div>
+                    <button id="btn-clear-log" class="secondary" title="로그 지우기">Clear</button>
+                    <button id="btn-minimize-log" class="secondary" title="최소화">_</button>
+                    <button id="btn-close-log" class="secondary" title="닫기">✕</button>
+                </div>
+            </div>
+            <pre id="log"></pre>
+            <div id="resize-handle"></div>
+        </div>
+
         <script src="./adminMachine.js"></script>
         <script src="./hotkeys.js"></script>
+        <script>
+            // 로그 창 드래그 이동 및 크기 조절
+            (function () {
+                const container = document.getElementById('log-container');
+                const header = document.getElementById('log-header');
+                const resizeHandle = document.getElementById('resize-handle');
+                const logPre = document.getElementById('log');
+
+                let isDragging = false;
+                let isResizing = false;
+                let startX, startY, startLeft, startTop, startWidth, startHeight;
+                let currentFontSize = 11; // 초기 폰트 크기 (픽셀)
+
+                // 드래그 이동
+                function startDrag(e) {
+                    if (e.target.closest('#log-controls') || e.target.closest('#resize-handle')) return;
+                    isDragging = true;
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = container.getBoundingClientRect();
+                    startLeft = rect.left;
+                    startTop = rect.top;
+                    container.style.transition = 'none';
+                }
+
+                header.addEventListener('mousedown', startDrag);
+                header.addEventListener('touchstart', startDrag, { passive: true });
+
+                // 크기 조절 시작
+                function startResize(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    isResizing = true;
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = container.getBoundingClientRect();
+                    startWidth = rect.width;
+                    startHeight = rect.height;
+                    container.style.transition = 'none';
+                }
+
+                resizeHandle.addEventListener('mousedown', startResize);
+                resizeHandle.addEventListener('touchstart', startResize, { passive: false });
+
+                // 이동 및 크기 조절 처리
+                function handleMove(e) {
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+                    if (isDragging) {
+                        const dx = clientX - startX;
+                        const dy = clientY - startY;
+                        container.style.left = startLeft + dx + 'px';
+                        container.style.top = startTop + dy + 'px';
+                        container.style.right = 'auto';
+                        container.style.bottom = 'auto';
+                    } else if (isResizing) {
+                        const dx = clientX - startX;
+                        const dy = clientY - startY;
+                        const newWidth = Math.max(300, startWidth + dx);
+                        const newHeight = Math.max(200, startHeight + dy);
+                        container.style.width = newWidth + 'px';
+                        container.style.height = newHeight + 'px';
+                    }
+                }
+
+                document.addEventListener('mousemove', handleMove);
+                document.addEventListener('touchmove', handleMove, { passive: true });
+
+                function endDragOrResize() {
+                    isDragging = false;
+                    isResizing = false;
+                    container.style.transition = '';
+                }
+
+                document.addEventListener('mouseup', endDragOrResize);
+                document.addEventListener('touchend', endDragOrResize);
+
+                // 로그 제어 버튼
+                document.getElementById('btn-clear-log').addEventListener('click', () => {
+                    logPre.textContent = '';
+                });
+
+                document.getElementById('btn-minimize-log').addEventListener('click', () => {
+                    container.classList.toggle('minimized');
+                });
+
+                document.getElementById('btn-close-log').addEventListener('click', () => {
+                    container.classList.add('hidden');
+                });
+
+                // 글자 크기 조절
+                document.getElementById('btn-font-smaller').addEventListener('click', () => {
+                    currentFontSize = Math.max(8, currentFontSize - 1);
+                    logPre.style.fontSize = currentFontSize + 'px';
+                });
+
+                document.getElementById('btn-font-larger').addEventListener('click', () => {
+                    currentFontSize = Math.min(20, currentFontSize + 1);
+                    logPre.style.fontSize = currentFontSize + 'px';
+                });
+
+                // 더블클릭으로 로그창 다시 열기
+                document.addEventListener('dblclick', (e) => {
+                    if (container.classList.contains('hidden') && e.target === document.body) {
+                        container.classList.remove('hidden');
+                    }
+                });
+            })();
+        </script>
     </body>
 </html>

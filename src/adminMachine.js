@@ -103,7 +103,6 @@ async function readLoop() {
     }
 }
 function handleAutoLoginDetect(text) {
-    // 조각 포함 가능하므로 소문자 변환 후 패턴 검색
     const lower = text.toLowerCase();
     if (!loggedIn && lower.includes('login suc') && lower.includes('success')) {
         setLoggedIn(true);
@@ -111,7 +110,38 @@ function handleAutoLoginDetect(text) {
     if (loggedIn && lower.includes('logged out')) {
         setLoggedIn(false);
     }
+
+    // 속도 데이터 수신 (SPEEDS:DO=255;DC=120;D1=70;D2=90)
+    if (text.startsWith('SPEEDS:')) {
+        parseSpeedsFromDevice(text);
+    }
 }
+
+function parseSpeedsFromDevice(line) {
+    // SPEEDS:DO=255;DC=120;D1=70;D2=90 파싱
+    const doMatch = line.match(/DO=(\d+)/);
+    const dcMatch = line.match(/DC=(\d+)/);
+    const d1Match = line.match(/D1=(\d+)/);
+    const d2Match = line.match(/D2=(\d+)/);
+
+    if (doMatch) {
+        document.getElementById('speed-do').value = doMatch[1];
+        document.getElementById('speed-do-range').value = doMatch[1];
+    }
+    if (dcMatch) {
+        document.getElementById('speed-dc').value = dcMatch[1];
+        document.getElementById('speed-dc-range').value = dcMatch[1];
+    }
+    if (d1Match) {
+        document.getElementById('speed-d1').value = d1Match[1];
+        document.getElementById('speed-d1-range').value = d1Match[1];
+    }
+    if (d2Match) {
+        document.getElementById('speed-d2').value = d2Match[1];
+        document.getElementById('speed-d2-range').value = d2Match[1];
+    }
+}
+
 async function send(cmd) {
     if (!writer) return;
     await writer.write(cmd + '\r\n');
@@ -121,6 +151,7 @@ async function gracefulDisconnect(goHome = false) {
     try {
         // 최신 속도 1회 더 전송 (이미 동일값이면 EEPROM 미작성)
         sendCurrentSpeeds(true);
+        ㄹ;
     } catch (e) {
         /* ignore */
     }
@@ -176,11 +207,11 @@ function sendCurrentSpeeds(initial = false) {
     const msg = document.getElementById('auto-speed-msg');
     if (msg) {
         msg.textContent = '동기화됨 (' + new Date().toLocaleTimeString() + ')';
-        setTimeout(() => (msg.textContent = '입력값 변경 후 약 0.5초 뒤 자동 전송됩니다.'), 2500);
+        setTimeout(() => (msg.textContent = '입력값 변경 후 약 0.1초 뒤 자동 전송됩니다.'), 2500);
     }
 }
 
-// 입력 변경 자동 전송 (디바운스 500ms)
+// 입력 변경 자동 전송 (디바운스 100ms)
 ['speed-do', 'speed-dc', 'speed-d1', 'speed-d2'].forEach((id) => {
     const el = document.getElementById(id);
     ['input', 'change'].forEach((ev) => {
@@ -189,7 +220,7 @@ function sendCurrentSpeeds(initial = false) {
             clearTimeout(speedDebounce);
             const msg = document.getElementById('auto-speed-msg');
             if (msg) msg.textContent = '전송 대기중...';
-            speedDebounce = setTimeout(() => sendCurrentSpeeds(false), 500);
+            speedDebounce = setTimeout(() => sendCurrentSpeeds(false), 100);
         });
     });
 });
@@ -233,26 +264,6 @@ manualButtons.forEach(
             send(base + spd);
         })
 );
-
-// 슬라이더 하단 +/- 미세조정 (이벤트 위임)
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.step-btn-small');
-    if (!btn) return;
-    const targetId = btn.dataset.target;
-    const delta = parseInt(btn.dataset.delta || '0', 10);
-    const numInput = document.getElementById(targetId);
-    const rangeInput = document.getElementById(targetId + '-range');
-    if (!numInput || !rangeInput) return;
-    const min = parseInt(numInput.min || '0', 10);
-    const max = parseInt(numInput.max || '255', 10);
-    let val = parseInt(numInput.value || '0', 10);
-    val = Math.min(max, Math.max(min, val + delta));
-    if (val === parseInt(numInput.value, 10)) return;
-    numInput.value = val;
-    rangeInput.value = val;
-    // 기존 로직 재사용 위해 input 이벤트 발생
-    numInput.dispatchEvent(new Event('input', { bubbles: true }));
-});
 
 // 길게 누르면 연속 증가/감소 ----------------------------------
 let holdBtn = null;
