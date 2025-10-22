@@ -823,10 +823,17 @@ function showScreen(screenId) {
             </div>
         `;
 
-        // [추가] end-screen 진입 시 즉시 로그아웃(L) 전송
-        try {
-            writeCmd('l');
-        } catch {}
+        // [CHG] end-screen 진입 시 즉시 로그아웃(L) 전송 (대/소문자 모두 시도, 비동기 보장)
+        (async () => {
+            try {
+                if (!isConnected) await connectToFaduino();
+                await writeCmd('L');
+            } catch {
+                try {
+                    await writeCmd('l');
+                } catch {}
+            }
+        })();
 
         // 카운트다운(버튼 활성화 이후에도 유지)
         const countdownText = document.getElementById('end-countdown');
@@ -951,12 +958,22 @@ function showScreen(screenId) {
         }
 
         if (writer) {
-            try {
-                // 기존 writeCmd('X') 대신 모터 정지 + ACK 소비
-                motorStop(); // await 불필요: 백그라운드로 'Motor stopped.'까지 소비
-            } catch (e) {
-                console.error('메인 복귀 중 모터 정지 실패:', e);
-            }
+            // [CHG] 로그아웃(L) 먼저 전송 후 X 전송 순서를 보장
+            (async () => {
+                try {
+                    try {
+                        await writeCmd('L');
+                    } catch {
+                        try {
+                            await writeCmd('l');
+                        } catch {}
+                    }
+                    await new Promise((r) => setTimeout(r, 80)); // 짧은 간격
+                    await motorStop(); // 'Motor stopped.'까지 대기
+                } catch (e) {
+                    console.error('메인 복귀 중 모터 정지 실패:', e);
+                }
+            })();
         }
         // 테스트 모드 시 잔여 큐 비우기
         if (__testMode) {
