@@ -183,7 +183,7 @@ async function gracefulDisconnect(goHome = false) {
 }
 // 버튼 이벤트
 document.getElementById('btn-connect').onclick = connect;
-document.getElementById('btn-login').onclick = () => send('99');
+document.getElementById('btn-login').onclick = () => send('98');
 document.getElementById('btn-help').onclick = () => send('h');
 document.getElementById('btn-query').onclick = () => send('Q');
 document.getElementById('btn-logout').onclick = () => send('L');

@@ -68,6 +68,7 @@ bool labelOpenTriggered = false; // 문 열기 1회 트리거 가드
 bool errorState = false; // 오류 상태 플래그
 
 bool login = false;  // 로그인 상태 변수
+bool adminMode = false; // [ADD] 관리자 모드 여부
 
 void setup() {
     Serial1.begin(9600);
@@ -116,7 +117,8 @@ void setup() {
 
     Serial1.println("=== System Initialized ===");
     Serial1.println("*** LOGIN REQUIRED ***");
-    Serial1.println("Enter '99' to login and unlock all functions");
+    Serial1.println("Enter '98' for ADMIN login (speed control enabled)");   // [ADD]
+    Serial1.println("Enter '99' for USER login (no real-time speed control)"); // [ADD]
     Serial1.println("Enter 'h' for help");
 }
 
@@ -152,49 +154,59 @@ void loop() {
         Serial1.println("Door will opened..");
         executeOpenDoor();
         labelOpenTriggered = true;
-        
     }
 
-    // 시리얼 명령 처리
     if (Serial1.available() > 0) {
-        String input = Serial1.readString();
+        String input = Serial1.readStringUntil('\n');
         input.trim();
-        
+
         Serial1.print("Input received: ");
         Serial1.println(input);
 
-        // 로그인 체크
-        if (input == "99") {
+        // 로그인 명령 우선 처리
+        if (input == "98") {
             login = true;
-            Serial1.println("*** LOGIN SUCCESSFUL ***");
-            Serial1.println("All functions are now unlocked!");
-            // 로그인 시 현재 EEPROM 속도 전송
+            adminMode = true;
+            Serial1.println("*** ADMIN LOGIN SUCCESSFUL ***");
+            Serial1.println("Real-time speed control ENABLED.");
             sendCurrentSpeeds();
+            Serial1.println("Enter 'h' for available commands");
+            return;
+        } else if (input == "99") {
+            login = true;
+            adminMode = false;
+            Serial1.println("*** USER LOGIN SUCCESSFUL ***");
+            Serial1.println("Real-time speed control DISABLED.");
             Serial1.println("Enter 'h' for available commands");
             return;
         }
 
-        // 속도 설정 명령 처리 (SPD:DO=255;DC=120;D1=70;D2=90)
+        // [핵심] 로그인 여부와 무관하게 X/L 즉시 처리
+        if (input.length() == 1) {
+            char c = input.charAt(0);
+            if (c == 'X' || c == 'x') { stopMotor(); return; }
+            if (c == 'L' || c == 'l') { logout();   return; }
+        }
+
+        // 관리자 전용 기능
         if (input.startsWith("SPD:")) {
-            if (!login) {
-                Serial1.println("*** ACCESS DENIED - Login required ***");
+            if (!adminMode) {
+                Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
                 return;
             }
             parseAndSetSpeeds(input);
             return;
         }
-
-        // 속도 조회 명령
         if (input == "Q" || input == "q") {
-            if (!login) {
-                Serial1.println("*** ACCESS DENIED - Login required ***");
+            if (!adminMode) {
+                Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
                 return;
             }
             sendCurrentSpeeds();
             return;
         }
 
-        // 로그인되지 않은 상태에서는 도움말과 센서 상태만 허용
+        // 로그인 전 허용 명령
         if (!login) {
             if (input == "h" || input == "H") {
                 showLoginHelp();
@@ -202,16 +214,15 @@ void loop() {
                 showSensorStatus();
             } else {
                 Serial1.println("*** ACCESS DENIED ***");
-                Serial1.println("Please login first by entering '99'");
+                Serial1.println("Please login first by entering '98' (admin) or '99' (user)");
                 Serial1.println("Available commands without login: 'h' (help), '0' (sensor status)");
             }
             return;
         }
 
-        // 로그인된 상태에서만 실행되는 명령들
+        // 로그인 후 일반 명령
         if (input.length() == 1) {
             char command = input.charAt(0);
-                
             switch(command) {
                 case '1': executeOpenDoor(); break;
                 case '2': executeCloseDoor(); break;
@@ -219,12 +230,8 @@ void loop() {
                 case '4': executeSensor2Motor(); break;
                 case '5': runAutoSequence(); break;
                 case '0': showSensorStatus(); break;
-                case 'X': 
-                case 'x': stopMotor(); break;
                 case 'h':
                 case 'H': showHelp(); break;
-                case 'L':
-                case 'l': logout(); break;
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
             }
         } else {
@@ -293,18 +300,21 @@ void emergencyCloseDoorIfOpen() {
 
 // 로그아웃 기능 추가
 void logout() {
+    stopMotor();
     login = false;
+    adminMode = false; // [ADD]
     Serial1.println("*** LOGGED OUT ***");
     Serial1.println("All functions are now locked.");
-    Serial1.println("Enter '99' to login again");
-    stopMotor();
+    Serial1.println("Enter '98' (admin) or '99' (user) to login again");
+    
 
 }
 
 // 로그인 전 도움말
 void showLoginHelp() {
     Serial1.println("=== LOGIN REQUIRED ===");
-    Serial1.println("99 - Login to unlock all functions");
+    Serial1.println("98 - Admin login (real-time speed control)");
+    Serial1.println("99 - User login (no real-time speed control)");
     Serial1.println("h  - Show this help");
     Serial1.println("0  - Show sensor status (allowed without login)");
     Serial1.println("======================");
@@ -319,11 +329,9 @@ void showHelp() {
     Serial1.println("4  - Run Sensor2 Motor (24V)");
     Serial1.println("5  - Run Full Auto Sequence");
     Serial1.println("0  - Show Sensor Status");
-    Serial1.println("Q  - Query current motor speeds");
-    Serial1.println("SPD:DO=n;DC=n;D1=n;D2=n - Set speeds");
     Serial1.println("X  - Stop Motor (Emergency)");
     Serial1.println("L  - Logout");
-    Serial1.println("h  - Show Help");
+    Serial1.println("Admin-only: Q (query speeds), SPD:DO=n;DC=n;D1=n;D2=n (set speeds)");
     Serial1.println("=====================================");
 }
 
@@ -569,6 +577,7 @@ void executeSensor1Motor() {
     
     if (seesaw_State2 == HIGH) {
         Serial1.println("Sensor2 is HIGH. Starting 24V motor (direction 1)...");
+
         unsigned long startMs = millis();
         while (seesaw_State2 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
@@ -646,14 +655,33 @@ void executeSensor2Motor() {
 
 // 새로운 함수: while 루프 안에서 속도 업데이트 확인
 void checkSerialForSpeedUpdate() {
-    if (Serial1.available() > 0) {
-        String input = Serial1.readStringUntil('\n');
-        input.trim();
-        
-        // 속도 설정 명령만 처리 (모터 동작 중에는 다른 명령 무시)
-        if (input.startsWith("SPD:") && login) {
-            parseAndSetSpeeds(input);
+    while (Serial1.available() > 0) {
+        int c = Serial1.peek();
+        if (c == '\n' || c == '\r') { Serial1.read(); continue; }
+
+        // 즉시 정지/로그아웃 (버퍼 소비 후 처리)
+        if (c == 'x' || c == 'X') { Serial1.read(); stopMotor(); return; }
+        if (c == 'l' || c == 'L') { Serial1.read(); logout();   return; }
+
+        // 관리자만 속도 관련 허용
+        if (c == 'S') {
+            String line = Serial1.readStringUntil('\n');
+            line.trim();
+            if (line.startsWith("SPD:")) {
+                if (login && adminMode) parseAndSetSpeeds(line);
+                else Serial1.println("*** ACCESS DENIED - Admin required for SPD ***");
+            }
+            continue;
         }
+        if (c == 'Q' || c == 'q') {
+            Serial1.read();
+            if (login && adminMode) sendCurrentSpeeds();
+            else Serial1.println("*** ACCESS DENIED - Admin required for Q ***");
+            continue;
+        }
+
+        // 그 외 명령은 메인 루프에서 처리하도록 남겨둠
+        break;
     }
 }
 
@@ -726,26 +754,24 @@ void parseAndSetSpeeds(String cmd) {
         Serial1.println("No speed change detected");
     }
 }
-
-void stopMotor() {
-    Serial1.println("*** EMERGENCY STOP - All motors halted ***");
-    
-    // 모든 모터 핀 LOW
-    digitalWrite(in1_Pin, LOW);
-    digitalWrite(in2_Pin, LOW);
+void stopMotor(){
+    // 모션 정지: 정상(X) 정지 시에는 인버터는 유지하고 FWD만 해제
+    digitalWrite(fwdPin, LOW);
+    //digitalWrite(inverterPin, LOW);
+    // 12V 모터 정지
     digitalWrite(in3_Pin, LOW);
     digitalWrite(in4_Pin, LOW);
-    analogWrite(ena_Pin, 0);
     analogWrite(enb_Pin, 0);
-    
-    // 인버터 및 FWD 핀도 정지
-    digitalWrite(inverterPin, LOW);
-    digitalWrite(fwdPin, LOW);
-    
-    // 라벨 모터도 정지
-    digitalWrite(labelMotor, LOW);
-    motorRunning = false;
-    motorStarted = false;
-    
-    Serial1.println("All motors stopped.");
+    // 24V 모터 정지
+    digitalWrite(in1_Pin, LOW);
+    digitalWrite(in2_Pin, LOW);
+    analogWrite(ena_Pin, 0);
+    Serial1.println("Motor stopped.");
+    login = false;  // 로그인 상태를 false로 변경
+        // Allow next label cycle
+    labelCutterState = false;
+    labelOpenTriggered = false;
+    Serial1.println("Knife deactivated.");
+    Serial1.println("*** LOGGED OUT BY EMERGENCY STOP ***");
+    Serial1.println("Enter '99' to login again");
 }
