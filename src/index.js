@@ -43,89 +43,192 @@ let __testMode = false;
 // [ADD] Show error screen only once per session
 let __errorShownOnce = false;
 
-function updateTestBadge() {
-    const b = document.getElementById('test-mode-badge');
-    if (!b) return;
-    if (__testMode) {
-        b.textContent = '테스트모드: ON';
-        b.style.color = '#86efac';
-    } else {
-        b.textContent = '테스트모드: OFF';
-        b.style.color = '#fca5a5';
+// [ADD] 세션용 유틸/상수
+const MEMBER_API_URL = 'https://cyclepet.mycafe24.com/member_api.php';
+const POINT_API_URL = 'https://cyclepet.mycafe24.com/point_api.php';
+
+// [ADD] UUID v4 생성 (member/point API용 unique key). group_cd를 prefix로 붙임
+function secureUuid(prefix = '') {
+    try {
+        if (window.crypto && typeof crypto.randomUUID === 'function') {
+            return prefix + crypto.randomUUID();
+        }
+        const buf = new Uint8Array(16);
+        crypto.getRandomValues(buf);
+        buf[6] = (buf[6] & 0x0f) | 0x40;
+        buf[8] = (buf[8] & 0x3f) | 0x80;
+        const hex = Array.from(buf)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+        const uuid = `${hex.substr(0, 8)}-${hex.substr(8, 4)}-${hex.substr(12, 4)}-${hex.substr(16, 4)}-${hex.substr(
+            20,
+            12
+        )}`;
+        return prefix + uuid;
+    } catch {
+        const rnd = Math.random().toString(36).slice(2);
+        return prefix + Date.now() + '-' + rnd;
     }
 }
-
-function simEnqueue(text, delay = 0) {
-    __simQueue.push({ text, delay });
+function newClientUniqueId() {
+    const g = (deviceConfig?.groupCode || 'etc') + '-';
+    return secureUuid(g);
+}
+function getGroupCode() {
+    return deviceConfig?.groupCode || localStorage.getItem('petmon.group_cd') || 'etc';
 }
 
-function installSimulator() {
-    // 가짜 reader
-    reader = {
-        async read() {
-            if (!__testMode) return { value: '', done: true };
-            if (__simPaused) {
-                await new Promise((r) => setTimeout(r, 100));
-                return { value: '', done: false };
-            }
-            if (__simQueue.length === 0) {
-                await new Promise((r) => setTimeout(r, 120));
-                return { value: '', done: false };
-            }
-            const item = __simQueue.shift();
-            if (item.delay) await new Promise((r) => setTimeout(r, item.delay));
-            return { value: item.text + '\n', done: false };
-        },
-        releaseLock() {},
-        cancel() {
-            __simPaused = true;
-        },
+// 간단 모달(확인/취소) 생성/표시
+function showConfirmModal({ title = '확인', lines = [], yesText = '예', noText = '아니오', onYes, onNo }) {
+    let overlay = document.getElementById('confirm-modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'confirm-modal-overlay';
+        overlay.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'background:rgba(0,0,0,.7)', // 어두운 오버레이
+            'backdrop-filter:blur(2px)',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'z-index:9999',
+        ].join(';');
+
+        const modal = document.createElement('div');
+        modal.id = 'confirm-modal';
+        modal.style.cssText = [
+            'width:560px', // 살짝 키운 크기 유지
+            'max-width:95vw',
+            'background:#0f172a', // 아주 어두운 배경 (slate-900)
+            'border-radius:14px',
+            'overflow:hidden',
+            'box-shadow:0 20px 50px rgba(0,0,0,.45)',
+            'border:1px solid #1e293b', // 어두운 경계
+            'font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+            'color:#cbd5e1', // 본문 기본 텍스트
+        ].join(';');
+
+        modal.innerHTML = `
+          <div id="cm-title" style="
+              padding:16px 22px;
+              font-size:18px;
+              font-weight:800;
+              color:#e5e7eb;               /* 밝은 제목 텍스트 */
+              background:#111827;          /* 타이틀 바: 한 톤 밝은 어두운색 */
+              border-bottom:1px solid #1e293b;
+          ">제목</div>
+
+          <div id="cm-body" style="
+              padding:18px 22px;
+              color:#cbd5e1;               /* 본문: 연한 슬레이트 */
+              font-size:22px;
+              line-height:1.7;
+              background:#0f172a;          /* 본문: 전체 배경과 일치 */
+          "></div>
+
+          <div style="
+              display:flex;
+              gap:10px;
+              justify-content:flex-end;
+              padding:14px 18px;
+              background:#0b1220;          /* 버튼 영역 살짝 차별화 */
+              border-top:1px solid #1e293b;
+          ">
+            <button id="cm-no" style="
+                padding:10px 16px;
+                border-radius:10px;
+                border:1px solid #334155;  /* 어두운 테두리 */
+                background:#0f172a;        /* 어두운 버튼 */
+                color:#cbd5e1;
+                cursor:pointer;
+                font-weight:600;
+                outline:none;
+                width: 100px;
+            ">아니오</button>
+
+            <button id="cm-yes" style="
+                padding:10px 16px;
+                border-radius:10px;
+                border:1px solid #3772ff;
+                background:#3772ff;        /* 브랜드 블루 */
+                color:#ffffff;
+                cursor:pointer;
+                font-weight:700;
+                outline:none;
+                width: 100px;
+            ">예</button>
+          </div>
+        `;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // 간단한 호버/포커스 효과
+        const yesBtnTemp = modal.querySelector('#cm-yes');
+        const noBtnTemp = modal.querySelector('#cm-no');
+        const addFocusRing = (el, color) => {
+            el.addEventListener('focus', () => (el.style.boxShadow = `0 0 0 2px ${color}55`));
+            el.addEventListener('blur', () => (el.style.boxShadow = 'none'));
+            el.addEventListener('mouseenter', () => (el.style.filter = 'brightness(1.05)'));
+            el.addEventListener('mouseleave', () => (el.style.filter = 'none'));
+        };
+        addFocusRing(yesBtnTemp, '#3772ff');
+        addFocusRing(noBtnTemp, '#94a3b8');
+    }
+
+    const titleEl = overlay.querySelector('#cm-title');
+    const bodyEl = overlay.querySelector('#cm-body');
+    const yesBtn = overlay.querySelector('#cm-yes');
+    const noBtn = overlay.querySelector('#cm-no');
+
+    titleEl.textContent = title;
+    // lines에 <b> 등 간단 HTML 사용하므로 그대로 출력
+    bodyEl.innerHTML = lines.map((l) => `<div style="margin:6px 0;">${l}</div>`).join('');
+    yesBtn.textContent = yesText || '예';
+    noBtn.textContent = noText || '아니오';
+
+    const close = () => {
+        overlay.style.display = 'none';
+        yesBtn.onclick = null;
+        noBtn.onclick = null;
+        document.removeEventListener('keydown', onKey);
+        overlay.removeEventListener('click', onOverlayClick);
     };
-    // 가짜 writer
-    writer = {
-        async write(data) {
-            if (!__testMode) return;
-            const cmd = String(data).trim();
-            // 명령에 따라 가짜 응답 시뮬레이션
-            if (cmd === '99') {
-                // pre-start
-                simEnqueue('Ready');
-            } else if (cmd === '1') {
-                simEnqueue('Door will open', 300);
-                simEnqueue('Motor stopped.', 800);
-            } else if (cmd === '2') {
-                simEnqueue('Door closed successfully!', 700);
-            } else if (cmd === '3') {
-                simEnqueue('Motor task completed!', 1200);
-            } else if (cmd === '4') {
-                simEnqueue('Sensor2 became LOW.', 1500);
-            } else if (cmd === 'X') {
-                simEnqueue('Motor stopped.', 300);
-            }
-        },
-        releaseLock() {},
+    yesBtn.onclick = () => {
+        try {
+            onYes && onYes();
+        } finally {
+            close();
+        }
     };
-    isConnected = true;
-    // UI 상태 갱신
-    const arduinoStatus = document.getElementById('arduino-status');
-    const machineStatus = document.getElementById('machine-status');
-    if (arduinoStatus) {
-        arduinoStatus.textContent = '시뮬레이터';
-        arduinoStatus.style.color = '#00ff4c';
-    }
-    if (machineStatus) {
-        machineStatus.textContent = '가능(테스트)';
-        machineStatus.style.color = '#00ff4c';
-    }
-    // [변경] 오류 화면이면 로그인 버튼을 절대 활성화하지 않음
-    const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex';
-    const isMainVisible = document.getElementById('main-screen')?.style.display === 'flex';
-    const inMaintenance = !!(window && window.__maintenanceMode);
-    if (isMainVisible && !isErrorVisible && !inMaintenance) {
-        updateLoginButtonByStatus();
-    } else if (isMainVisible) {
-        updateLoginButtonByStatus();
-    }
+    noBtn.onclick = () => {
+        try {
+            onNo && onNo();
+        } finally {
+            close();
+        }
+    };
+
+    // ESC/Enter/오버레이 클릭 지원
+    const onKey = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            noBtn.click();
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            yesBtn.click();
+        }
+    };
+    const onOverlayClick = (e) => {
+        if (e.target && e.target.id === 'confirm-modal-overlay') {
+            noBtn.click();
+        }
+    };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', onOverlayClick);
+
+    overlay.style.display = 'flex';
 }
 
 // 장치 분리(케이블 탈거 등) 발생 시 공통 처리
@@ -190,56 +293,57 @@ let currentPhoneNumber = '';
 let deviceConfig = { deviceCode: undefined, branchName: undefined };
 
 // ====== 로컬 ini 파일(C:\\petmon.ini)에서 지점명/기기코드 읽기 ======
-// 보안 제한으로 브라우저에서 임의 경로 파일을 직접 읽을 수 없습니다.
-// 대신, index.html과 동일한 오리진에서 petmon.ini를 정적 제공하거나(권장, 루트에 배치),
-// kiosk 브라우저/로컬 서버(예: http-server)로 C:\\petmon.ini를 프록시해주세요.
-// 아래 로직은 두 위치를 순차 시도합니다.
+// 대신, index.html과 동일한 오리진에서 petmon.ini를 정적 제공하거나(권장, 루트에 배치)
 //  1) /petmon.ini (서비스 루트)
 //  2) /config/petmon.ini (서브 경로 예시)
 // INI 포맷 예:
 //   device=SW0000
 //   branch=연구소
+//   group_cd=suwon
 async function loadDeviceConfig() {
-    // 0) URL 파라미터 우선 사용 (?branch=연구소&device=SW0000)
+    // 0) URL 파라미터 우선 사용 (?branch=연구소&device=SW0000&group_cd=suwon)
     try {
         const params = new URLSearchParams(window.location.search || '');
         const pBranch = params.get('branch');
         const pDevice = params.get('device');
-        if (pBranch || pDevice) {
+        const pGroupCd = params.get('group_cd');
+        if (pBranch || pDevice || pGroupCd) {
             deviceConfig = {
                 deviceCode: pDevice || deviceConfig.deviceCode,
                 branchName: pBranch || deviceConfig.branchName,
+                groupCode: pGroupCd || deviceConfig.groupCode,
             };
-            // UI 반영
             if (deviceConfig.branchName && branchNameSpan) branchNameSpan.textContent = deviceConfig.branchName;
-            // 저장(영구화)
             if (pBranch) localStorage.setItem('petmon.branch', deviceConfig.branchName || '');
             if (pDevice) localStorage.setItem('petmon.device', deviceConfig.deviceCode || '');
+            // [ADD] group_cd 저장
+            if (pGroupCd) localStorage.setItem('petmon.group_cd', deviceConfig.groupCode || '');
             return;
         }
     } catch {}
-
     // 1) localStorage 저장값 사용
     try {
         const lsBranch = localStorage.getItem('petmon.branch');
         const lsDevice = localStorage.getItem('petmon.device');
-        if (lsBranch || lsDevice) {
+        const lsGroup = localStorage.getItem('petmon.group_cd');
+        if (lsBranch || lsDevice || lsGroup) {
             deviceConfig = {
                 deviceCode: lsDevice || deviceConfig.deviceCode,
                 branchName: lsBranch || deviceConfig.branchName,
+                groupCode: lsGroup || deviceConfig.groupCode,
             };
             if (deviceConfig.branchName && branchNameSpan) branchNameSpan.textContent = deviceConfig.branchName;
             return;
         }
     } catch {}
-
-    // 2) window.PETMON_CONFIG 사용 (서버/파일 없이 동작)
+    // 2) window.PETMON_CONFIG 사용
     try {
         if (window && window.PETMON_CONFIG) {
             const cfg = window.PETMON_CONFIG || {};
             deviceConfig = {
                 deviceCode: cfg.deviceCode,
                 branchName: cfg.branchName,
+                groupCode: cfg.groupCode,
             };
             if (deviceConfig.branchName && branchNameSpan) {
                 branchNameSpan.textContent = deviceConfig.branchName;
@@ -247,7 +351,6 @@ async function loadDeviceConfig() {
             }
         }
     } catch {}
-
     // 3) 같은 오리진에서 제공되는 ini 파일 시도
     const candidates = ['/petmon.ini', '/config/petmon.ini'];
     for (const url of candidates) {
@@ -256,7 +359,7 @@ async function loadDeviceConfig() {
             if (!res.ok) continue;
             const text = await res.text();
             const lines = text.split(/\r?\n/);
-            const out = { deviceCode: undefined, branchName: undefined };
+            const out = { deviceCode: undefined, branchName: undefined, groupCode: undefined };
             for (const raw of lines) {
                 const line = raw.trim();
                 if (!line || line.startsWith('#') || line.startsWith(';')) continue;
@@ -266,17 +369,18 @@ async function loadDeviceConfig() {
                 const val = m[2].trim();
                 if (key === 'device' || key === 'devicecode' || key === 'code') out.deviceCode = val;
                 if (key === 'branch' || key === 'branchname' || key === 'name') out.branchName = val;
+                if (key === 'group_cd' || key === 'group' || key === 'groupcode') out.groupCode = val;
             }
-            if (out.branchName) {
+            if (out.branchName || out.deviceCode || out.groupCode) {
                 deviceConfig = out;
-                if (branchNameSpan) branchNameSpan.textContent = out.branchName;
+                if (branchNameSpan && out.branchName) branchNameSpan.textContent = out.branchName;
+                if (out.groupCode) localStorage.setItem('petmon.group_cd', out.groupCode);
+                if (out.deviceCode) localStorage.setItem('petmon.device', out.deviceCode);
+                if (out.branchName) localStorage.setItem('petmon.branch', out.branchName);
                 return;
             }
-        } catch (e) {
-            // 다음 후보로 진행
-        }
+        } catch {}
     }
-    // 실패 시 기본 라벨 제거
     if (branchNameSpan) branchNameSpan.textContent = '';
 }
 
@@ -284,7 +388,7 @@ async function loadDeviceConfig() {
 // 브라우저 보안 정책상 자동 접근은 불가하지만, 사용자의 명시적 동작(키 입력/클릭)으로는 가능.
 // 단축키: Ctrl+Alt+I 누르면 파일 선택 창이 열리고 ini를 파싱해서 적용/저장합니다.
 function parseIniText(text) {
-    const out = { deviceCode: undefined, branchName: undefined };
+    const out = { deviceCode: undefined, branchName: undefined, groupCode: undefined };
     const lines = String(text || '').split(/\r?\n/);
     for (const raw of lines) {
         const line = (raw || '').trim();
@@ -295,6 +399,7 @@ function parseIniText(text) {
         const val = m[2].trim();
         if (key === 'device' || key === 'devicecode' || key === 'code') out.deviceCode = val;
         if (key === 'branch' || key === 'branchname' || key === 'name') out.branchName = val;
+        if (key === 'group_cd' || key === 'group' || key === 'groupcode') out.groupCode = val;
     }
     return out;
 }
@@ -318,8 +423,8 @@ async function pickAndLoadIni() {
         const file = await handle.getFile();
         const text = await file.text();
         const parsed = parseIniText(text);
-        if (!parsed.branchName && !parsed.deviceCode) {
-            alert('유효한 ini 형식이 아닙니다. (예: device=SW0001, branch=홍대점)');
+        if (!parsed.branchName && !parsed.deviceCode && !parsed.groupCode) {
+            alert('유효한 ini 형식이 아닙니다. (예: device=SW0001, branch=홍대점, group_cd=suwon)');
             return;
         }
         deviceConfig = parsed;
@@ -327,6 +432,7 @@ async function pickAndLoadIni() {
         try {
             if (parsed.branchName) localStorage.setItem('petmon.branch', parsed.branchName);
             if (parsed.deviceCode) localStorage.setItem('petmon.device', parsed.deviceCode);
+            if (parsed.groupCode) localStorage.setItem('petmon.group_cd', parsed.groupCode);
         } catch {}
         alert('설정이 적용되었습니다.');
     } catch (e) {
@@ -568,46 +674,70 @@ console.error = function (...args) {
 // 포인트 적립 API 호출
 async function callPointApi(mobileWithHyphens, count) {
     if (__testMode) {
-        // 테스트 모드에선 바로 성공 응답 시뮬레이트
         return Promise.resolve({ status: 'ok', test: true, mobile: mobileWithHyphens, input_cnt: count });
     }
-    const apiUrl = 'https://petcycle.mycafe24.com/point_api.php';
-    const mobile = (mobileWithHyphens || '').replace(/[^0-9]/g, '');
+    // [CHG] cyclepet 도메인 + JSON 방식 + unique key + group_cd 포함
+    const apiUrl = POINT_API_URL;
     const payload = {
-        device: deviceConfig.deviceCode || 'SW0001',
-        mobile: mobile,
+        mobile: String(mobileWithHyphens || ''),
         input_cnt: Number(count),
+        device: deviceConfig.deviceCode || 'UNKNOWN',
+        group_cd: getGroupCode() || 'etc',
+        client_unique_id: newClientUniqueId(),
     };
 
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json;charset=UTF-8',
-                Accept: 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
 
-        const text = await response.text(); // 일부 응답이 JSON이 아닐 수 있으므로 먼저 text로 받음
+        const text = await response.text();
         let parsed;
         try {
             parsed = text ? JSON.parse(text) : null;
         } catch {
-            parsed = text; // 파싱 실패 시 원문 텍스트 보존
+            parsed = text;
         }
 
         if (!response.ok) {
-            // 서버가 에러 메시지를 JSON으로 보냈다면 그 메시지를 사용
             const errMsg = parsed && parsed.message ? parsed.message : `HTTP 오류: ${response.status}`;
             throw new Error(errMsg);
         }
-
         return parsed;
     } catch (error) {
         console.error('포인트 API 호출 실패:', error);
         throw error;
     }
+}
+
+// [ADD] 회원 확인 API 호출
+async function callMemberApi(mobileWithHyphens) {
+    const apiUrl = MEMBER_API_URL;
+    const payload = {
+        mobile: String(mobileWithHyphens || ''),
+        device: deviceConfig.deviceCode || 'UNKNOWN',
+        group_cd: getGroupCode() || 'etc',
+        client_unique_id: newClientUniqueId(),
+    };
+    const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let parsed;
+    try {
+        parsed = text ? JSON.parse(text) : null;
+    } catch {
+        parsed = text;
+    }
+    if (!res.ok) {
+        const msg = parsed && parsed.message ? parsed.message : `HTTP 오류: ${res.status}`;
+        throw new Error(msg);
+    }
+    return parsed;
 }
 
 // 누적 투입 횟수로 API 호출 후 메인으로 복귀
@@ -617,9 +747,9 @@ async function finalizeAndReturnHome() {
     let result = null;
     try {
         if (currentPhoneNumber && depositCount > 0) {
+            // [CHG] callPointApi는 unique key + group_cd 포함해 전송
             result = await callPointApi(currentPhoneNumber, depositCount);
             if (result && result.status === 'error') {
-                // 실패 응답 로그
                 const logLineErr = `[${nowTs()}] RESULT=ERROR device=${
                     deviceConfig.deviceCode || 'UNKNOWN'
                 } mobile=${currentPhoneNumber} count=${depositCount} msg=${
@@ -628,23 +758,19 @@ async function finalizeAndReturnHome() {
                 appendPointLog(logLineErr);
                 console.error('포인트 API 응답 오류:', result.message || result);
             } else {
-                // 성공 로그
                 const logLineOk = `[${nowTs()}] RESULT=OK device=${
                     deviceConfig.deviceCode || 'UNKNOWN'
                 } mobile=${currentPhoneNumber} count=${depositCount} raw=${JSON.stringify(result)}`;
                 appendPointLog(logLineOk);
-                // console.log('포인트 적립 결과:', result);
             }
         }
     } catch (err) {
-        // 예외 로그
         const logLineEx = `[${nowTs()}] RESULT=EXCEPTION device=${
             deviceConfig.deviceCode || 'UNKNOWN'
         } mobile=${currentPhoneNumber} count=${depositCount} error=${(err && (err.message || err)) || ''}`;
         appendPointLog(logLineEx);
         console.error('포인트 적립 중 예외 발생:', err);
     } finally {
-        // 화면 및 상태 초기화
         depositCount = 0;
         showScreen('main-screen');
         isFinalizing = false;
@@ -1178,7 +1304,7 @@ async function beginGracefulAutoExit() {
 }
 
 function handleInactivity() {
-    clearTimeout(inactivityTimeout); // 기존 타임아웃 취소
+    clearTimeout(inactivityTimeout);
     inactivityTimeout = setTimeout(() => {
         // end-screen의 귀가 로직과 동일한 흐름으로 종료
         beginGracefulAutoExit();
@@ -1221,7 +1347,7 @@ async function handleExitButton() {
                 } else if (commands[i].cmd === '4') {
                     // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
-                    await new Promise((r) => setTimeout(r, 3000));
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
                     // 2번 명령(문 닫기) 처리
                     await waitForArduinoResponse('Door closed successfully!');
@@ -1368,7 +1494,7 @@ async function startProcess() {
                 } else if (commands[i].cmd === '4') {
                     // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
-                    await new Promise((r) => setTimeout(r, 3000));
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
                     // 2번 명령(문 닫기) 처리
                     await waitForArduinoResponse('Door closed successfully!');
@@ -1738,32 +1864,120 @@ loginButton.addEventListener('click', () => {
 
 loginSubmit.addEventListener('click', async () => {
     const phone = phoneNumberInput.value;
-    if (phone.length === 13) {
-        loginPopup.style.display = 'none';
-        currentPhoneNumber = phone;
-        depositCount = 0;
+    if (phone.length !== 13) {
+        // 팝업 유지, 간단 안내
+        showConfirmModal({
+            title: '전화번호 확인',
+            lines: ['올바른 전화번호를 입력하세요.', '(예: 010-1234-5678)'],
+            yesText: '확인',
+            noText: '취소',
+            onYes: () => {},
+            onNo: () => {},
+        });
+        return;
+    }
 
-        try {
-            if (!isConnected) {
-                await connectToFaduino(); // 연결 보장
-            }
-            if (!isConnected) {
-                abortProcessNow('기기 연결이 필요합니다. 관리자에게 문의해주세요.');
-                return;
-            }
-            await writeCmd('99'); // 로그인
-            await new Promise((r) => setTimeout(r, 800));
-            isStopped = false;
-            stopButton.disabled = false;
-            await startProcess(); // 바로 시작
-        } catch (e) {
-            console.error('로그인/시작 처리 오류:', e);
-            // alert → 즉시 중단 + 에러 화면
-            abortProcessNow('장치에 명령을 전송하지 못했습니다. 관리자에게 문의해주세요.');
+    try {
+        // [NEW] 먼저 회원 확인 API 호출
+        const member = await callMemberApi(phone);
+
+        // 성공 케이스: 회원명 확인 팝업
+        if (member?.status === 'success') {
+            const uname = member?.data?.user_name || '';
+            showConfirmModal({
+                title: '회원 확인',
+                lines: [`회원명 : <b>${uname}</b>`, `전화번호 : <b>${phone}</b>`, `<b>${uname}</b> 님이 맞으십니까?`],
+                yesText: '예',
+                noText: '아니오',
+                onYes: async () => {
+                    // 기존 시작 로직 수행
+                    loginPopup.style.display = 'none';
+                    currentPhoneNumber = phone;
+                    depositCount = 0;
+
+                    try {
+                        if (!isConnected) {
+                            await connectToFaduino();
+                        }
+                        if (!isConnected) {
+                            abortProcessNow('기기 연결이 필요합니다. 관리자에게 문의해주세요.');
+                            return;
+                        }
+                        await writeCmd('99'); // 로그인
+                        await new Promise((r) => setTimeout(r, 800));
+                        isStopped = false;
+                        stopButton.disabled = false;
+                        await startProcess();
+                    } catch (e) {
+                        console.error('로그인/시작 처리 오류:', e);
+                        abortProcessNow('장치에 명령을 전송하지 못했습니다. 관리자에게 문의해주세요.');
+                    }
+                },
+                onNo: () => {
+                    // 번호 재입력 유도 (팝업 유지)
+                },
+            });
             return;
         }
-    } else {
-        alert('올바른 전화번호를 입력하세요. (예: 010-1234-5678)');
+
+        // FAIL 이면서 "처음 사용" 메시지인 경우: 전화번호 재확인 팝업
+        const firstUseMsg = 'PETMON에 처음 사용하시는 회원입니다. 전화번호를 확인하기 위해 한번더 입력 부탁드립니다';
+        if (member?.status === 'FAIL' && String(member?.message || '').includes('처음 사용')) {
+            showConfirmModal({
+                title: '전화번호 확인',
+                lines: [`입력하신 전화번호: <b>${phone}</b>`, '이 전화번호가 맞습니까?'],
+                yesText: '예',
+                noText: '아니오',
+                onYes: async () => {
+                    // 신규 회원도 동일하게 시작
+                    loginPopup.style.display = 'none';
+                    currentPhoneNumber = phone;
+                    depositCount = 0;
+
+                    try {
+                        if (!isConnected) {
+                            await connectToFaduino();
+                        }
+                        if (!isConnected) {
+                            abortProcessNow('기기 연결이 필요합니다. 관리자에게 문의해주세요.');
+                            return;
+                        }
+                        await writeCmd('99');
+                        await new Promise((r) => setTimeout(r, 800));
+                        isStopped = false;
+                        stopButton.disabled = false;
+                        await startProcess();
+                    } catch (e) {
+                        console.error('로그인/시작 처리 오류:', e);
+                        abortProcessNow('장치에 명령을 전송하지 못했습니다. 관리자에게 문의해주세요.');
+                    }
+                },
+                onNo: () => {
+                    // 번호 재입력
+                },
+            });
+            return;
+        }
+
+        // 그 외 FAIL/예외 메시지
+        showConfirmModal({
+            title: '회원 확인 실패',
+            lines: [String(member?.message || '회원 확인 중 오류가 발생했습니다.')],
+            yesText: '확인',
+            noText: '닫기',
+            onYes: () => {},
+            onNo: () => {},
+        });
+    } catch (e) {
+        console.error('회원 확인 중 오류:', e);
+        showConfirmModal({
+            title: '오류',
+            lines: ['회원 확인 중 오류가 발생했습니다.', String(e?.message || e)],
+            yesText: '확인',
+            noText: '닫기',
+            onYes: () => {},
+            onNo: () => {},
+        });
     }
 });
 
@@ -1830,7 +2044,7 @@ stopButton.addEventListener('click', async () => {
                 } else if (commands[i].cmd === '4') {
                     // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
-                    await new Promise((r) => setTimeout(r, 3000));
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
                     // 2번 명령(문 닫기) 처리
                     await waitForArduinoResponse('Door closed successfully!');
@@ -2045,6 +2259,10 @@ if (typeof window !== 'undefined') {
         __testMode = false;
         updateTestBadge();
         if (testControls) testControls.style.display = 'none';
+        // [ADD] 관리자 모드 종료 시 세션 제거
+        try {
+            sessionStorage.removeItem('petmon.adminPinOK');
+        } catch {}
     }
 
     function ensureExitButton() {
@@ -2058,6 +2276,20 @@ if (typeof window !== 'undefined') {
                 'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
             exitBtn.addEventListener('click', exitAdminMode);
             testControls.appendChild(exitBtn);
+        }
+
+        // [ADD] 새로고침 버튼
+        let refreshBtn = document.getElementById('btn-refresh-page');
+        if (!refreshBtn) {
+            refreshBtn = document.createElement('button');
+            refreshBtn.id = 'btn-refresh-page';
+            refreshBtn.textContent = '새로고침';
+            refreshBtn.style.cssText =
+                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
+            refreshBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+            testControls.appendChild(refreshBtn);
         }
     }
 
