@@ -44,7 +44,7 @@ let __testMode = false;
 let __errorShownOnce = false;
 
 // [ADD] 세션용 유틸/상수
-const MEMBER_API_URL = 'https://cyclepet.mycafe24.com/member_api.php';
+const MEMBER_API_URL = 'https://petcycle.mycafe24.com/member_api.php';
 const POINT_API_URL = 'https://petcycle.mycafe24.com/point_api.php';
 
 // [ADD] UUID v4 생성 (member/point API용 unique key). group_cd를 prefix로 붙임
