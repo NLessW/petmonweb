@@ -779,6 +779,9 @@ async function finalizeAndReturnHome() {
 
 // ========== 화면 전환 ==========
 function showScreen(screenId) {
+    // [ADD] ensure arrow hidden on any screen switch
+    hideBottomArrow();
+
     document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
     document.getElementById(screenId).style.display = 'flex';
 
@@ -1092,9 +1095,7 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             iconKey === 'label'
                 ? `<svg width="90" height="90" viewBox="0 0 90 90" fill="none" aria-hidden="true">
                                  <circle cx="45" cy="45" r="14" fill="#ffffff" stroke="#3772ff" stroke-width="4"/>
-                                 <!-- 위: 세로로 긴 삼각형(아래로 향함) -->
                                  <polygon points="40,18 50,18 45,38" fill="#f59e0b" stroke="#fbbf24" stroke-width="2"/>
-                                 <!-- 아래: 세로로 긴 삼角형(위로 향함) -->
                                  <polygon points="40,72 50,72 45,52" fill="#f59e0b" stroke="#fbbf24" stroke-width="2"/>
                              </svg>`
                 : `<img src="${iconUrl}" alt="${iconAlt || ''}" width="90" height="90"/>`;
@@ -1117,7 +1118,6 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             );
             box.classList.add(`theme-${accent}`);
         }
-        // 진행도 업데이트
         const fill = document.getElementById('process-progress-fill');
         if (fill) {
             let pct = 0;
@@ -1127,6 +1127,13 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             else if (iconKey === 'scan') pct = 75;
             else if (iconKey === 'collect') pct = 95;
             fill.style.width = pct + '%';
+        }
+
+        // [ADD] show bottom arrow only for the label step
+        if (iconKey === 'label') {
+            showBottomArrowAt(1047);
+        } else {
+            hideBottomArrow();
         }
     } catch (e) {
         // 안전 장치: 렌더 실패 시 텍스트만
@@ -1146,6 +1153,9 @@ const SVG_CLOSE = `
  </svg>`;
 
 function renderOpenDoorOriginal(messageHtml) {
+    // [ADD] hide arrow when leaving label step
+    hideBottomArrow();
+
     processMessage.innerHTML = `
         <div class="process-hero accent-open">
             <div class="icon-bubble">${SVG_OPEN}</div>
@@ -1162,6 +1172,9 @@ function renderOpenDoorOriginal(messageHtml) {
 }
 
 function renderCloseDoorOriginal(messageText) {
+    // [ADD] hide arrow when leaving label step
+    hideBottomArrow();
+
     processMessage.innerHTML = `
         <div class="process-hero accent-close">
             <div class="icon-bubble">${SVG_CLOSE}</div>
@@ -2141,214 +2154,66 @@ function updateLoginButtonByStatus() {
     }
 }
 
-// 전역: 처리되지 않은 Promise 거부 캐치 → 장치 분리시 사용자 안내
-if (typeof window !== 'undefined') {
-    window.addEventListener('unhandledrejection', (event) => {
-        // 장치 분리 안내 우선 처리
-        try {
-            if (handleDeviceLost(event.reason)) {
-                event.preventDefault?.();
-                return;
-            }
-        } catch {}
-
-        // 추가: 모든 미처리 거부를 에러 로그로 남김
-        try {
-            const reason = event && event.reason !== undefined ? event.reason : '(no reason)';
-            appendErrorLog(`[${nowTs()}] UNHANDLED_REJECTION ${__errorToText(reason)}`);
-        } catch {}
-    });
-
-    // 전역 런타임 에러 핸들링 → 파일에 기록
-    window.addEventListener('error', (ev) => {
-        try {
-            const msg = ev?.message || 'unknown error';
-            const src = ev?.filename || '';
-            const ln = ev?.lineno != null ? `:${ev.lineno}` : '';
-            const cn = ev?.colno != null ? `:${ev.colno}` : '';
-            const errTxt = __errorToText(ev?.error || msg);
-            appendErrorLog(`[${nowTs()}] WINDOW_ERROR ${src}${ln}${cn} ${errTxt}`);
-        } catch {}
-    });
-    // 초기 지점명 로드
-    loadDeviceConfig();
-    // 포인트 로그 내보내기: Ctrl+Alt+L
-    window.addEventListener('keydown', async (e) => {
-        // Ctrl+Alt+I: 로컬 ini 파일 선택해서 적용
-        if (e.ctrlKey && e.altKey && (e.key === 'i' || e.key === 'I')) {
-            try {
-                await pickAndLoadIni();
-            } catch (err) {
-                console.debug('INI 선택 중 오류(무시 가능):', err);
-            }
-            return;
-        }
-
-        if (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L')) {
-            try {
-                if (!navigator?.storage?.getDirectory) return alert('로그 파일 시스템 접근을 지원하지 않습니다.');
-                const root = await navigator.storage.getDirectory();
-                const dir = await root.getDirectoryHandle('petmon');
-                const file = await dir.getFileHandle('point_log.txt');
-                const blob = await file.getFile();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'point_log.txt';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                }, 0);
-            } catch (err) {
-                alert('로그 파일이 아직 없습니다. (투입 후 생성됩니다)');
-            }
-        }
-        // Ctrl+Alt+E: 에러 로그 내보내기 (OPFS)
-        if (e.ctrlKey && e.altKey && (e.key === 'e' || e.key === 'E')) {
-            try {
-                if (!navigator?.storage?.getDirectory) return alert('에러 로그 내보내기를 지원하지 않습니다.');
-                const root = await navigator.storage.getDirectory();
-                const dir1 = await root.getDirectoryHandle('petmon');
-                const dir2 = await dir1.getDirectoryHandle('log');
-                const fh = await dir2.getFileHandle('errorlog.txt');
-                const blob = await fh.getFile();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'errorlog.txt';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                }, 0);
-            } catch (err) {
-                alert('에러 로그가 아직 없습니다. (오류 발생 시 생성됩니다)');
-            }
-        }
-        // Ctrl+Alt+O: 에러 로그 파일 직접 지정(한 번만 설정하면 지속 사용)
-        if (e.ctrlKey && e.altKey && (e.key === 'o' || e.key === 'O')) {
-            try {
-                await setErrorLogFileManually();
-            } catch (err) {
-                console.error('에러 로그 파일 지정 실패:', err);
-            }
-        }
-    });
-    // 스크립트에서 수동 호출할 수 있도록 노출
-    window.setErrorLogFileManually = setErrorLogFileManually;
-    // 테스트 모드 토글/오류 트리거 + 관리자 모드 진입
-    const toggleBtn = document.getElementById('btn-toggle-test');
-    const errBtn = document.getElementById('btn-test-error');
-    const skipBtn = document.getElementById('btn-skip-cutter');
-    const testControls = document.getElementById('test-controls');
-    const adminTrigger = document.getElementById('admin-mode-trigger');
-
-    // 관리자 모드 전에는 숨김 (CSS에서도 기본값을 none으로 설정)
-    if (testControls) testControls.style.display = 'none';
-
-    function exitAdminMode() {
-        __testMode = false;
-        updateTestBadge();
-        if (testControls) testControls.style.display = 'none';
-        // [ADD] 관리자 모드 종료 시 세션 제거
-        try {
-            sessionStorage.removeItem('petmon.adminPinOK');
-        } catch {}
-    }
-
-    function ensureExitButton() {
-        if (!testControls) return;
-        let exitBtn = document.getElementById('btn-exit-admin');
-        if (!exitBtn) {
-            exitBtn = document.createElement('button');
-            exitBtn.id = 'btn-exit-admin';
-            exitBtn.textContent = '관리자모드 종료';
-            exitBtn.style.cssText =
-                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
-            exitBtn.addEventListener('click', exitAdminMode);
-            testControls.appendChild(exitBtn);
-        }
-
-        // [ADD] 새로고침 버튼
-        let refreshBtn = document.getElementById('btn-refresh-page');
-        if (!refreshBtn) {
-            refreshBtn = document.createElement('button');
-            refreshBtn.id = 'btn-refresh-page';
-            refreshBtn.textContent = '새로고침';
-            refreshBtn.style.cssText =
-                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
-            refreshBtn.addEventListener('click', () => {
-                window.location.reload();
-            });
-            testControls.appendChild(refreshBtn);
-        }
-    }
-
-    async function enterAdminMode() {
-        try {
-            // PIN 요구 (전역 유틸은 index.html에 정의)
-            if (window.requireAdminPin) {
-                const ok = await window.requireAdminPin();
-                if (!ok) return;
-                try {
-                    sessionStorage.setItem('petmon.adminPinOK', '1');
-                } catch {}
-            }
-        } catch {}
-        if (testControls) testControls.style.display = 'flex';
-        ensureExitButton();
-    }
-
-    // 1초 내 4회 연속 클릭 시 관리자 모드 진입
-    if (adminTrigger) {
-        let clicks = 0;
-        let timer = null;
-        adminTrigger.addEventListener('click', () => {
-            if (clicks === 0) {
-                timer = setTimeout(() => {
-                    clicks = 0;
-                    timer = null;
-                }, 1000);
-            }
-            clicks++;
-            if (clicks >= 4) {
-                clicks = 0;
-                if (timer) {
-                    clearTimeout(timer);
-                    timer = null;
+// [ADD] Bottom arrow helpers (tip+body with animation)
+function showBottomArrowAt(px) {
+    try {
+        // Inject styles once
+        if (!document.getElementById('bottom-arrow-style')) {
+            const style = document.createElement('style');
+            style.id = 'bottom-arrow-style';
+            style.innerHTML = `
+                #bottom-arrow {
+                    position: fixed;
+                    bottom: 12px;                   /* lift a bit above the edge */
+                    pointer-events: none;
+                    z-index: 9999;
+                    display: block;
+                    /* Base transform includes -50% X centering; animation adjusts Y only */
+                    transform: translate(-50%, 0);
+                    animation: arrow-bob 1.3s ease-in-out infinite;
                 }
-                enterAdminMode();
-            }
-        });
-    }
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            __testMode = !__testMode;
-            updateTestBadge();
-            if (__testMode) {
-                if (!isConnected) installSimulator();
-            } else {
-                teardownSerial();
-            }
-        });
-    }
-    if (errBtn) {
-        errBtn.addEventListener('click', () => {
-            if (!__testMode) return alert('테스트 모드를 먼저 켜세요.');
-            showErrorScreen('테스트: 임의 오류 화면입니다.');
-        });
-    }
-    if (skipBtn) {
-        skipBtn.addEventListener('click', () => {
-            if (!__testMode) return alert('테스트 모드를 먼저 켜세요.');
-            // 띠 분리기 단계를 건너뛰도록 'Label cutting done'과 문 열림과 동일한 효과 트리거
-            simEnqueue('Label cutting done!', 100);
-            simEnqueue('Door will open', 200);
-            simEnqueue('Motor stopped.', 400);
-        });
-    }
-    updateTestBadge();
+                #bottom-arrow .shaft {
+                    width: 14px;                    /* thicker body */
+                    height: 70px;                   /* taller body */
+                    background: var(--arrow-color, #3772ff);
+                    margin: 0 auto;
+                    box-shadow: 0 2px 4px rgba(0,0,0,.35);
+                }
+                #bottom-arrow .head {
+                    width: 0;
+                    height: 0;
+                    border-left: 22px solid transparent;
+                    border-right: 22px solid transparent;
+                    border-top: 28px solid var(--arrow-color, #3772ff); /* bigger tip */
+                    filter: drop-shadow(0 2px 4px rgba(0,0,0,.35));
+                }
+                @keyframes arrow-bob {
+                    0%, 100% { transform: translate(-50%, 0); }
+                    50%      { transform: translate(-50%, -12px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        let el = document.getElementById('bottom-arrow');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'bottom-arrow';
+            // tip + body
+            el.innerHTML = `
+                <div class="shaft"></div>
+                <div class="head"></div>
+            `;
+            document.body.appendChild(el);
+        }
+        el.style.left = px + 'px';
+        el.style.display = 'block';
+    } catch {}
+}
+
+function hideBottomArrow() {
+    try {
+        const el = document.getElementById('bottom-arrow');
+        if (el) el.style.display = 'none';
+    } catch {}
 }
