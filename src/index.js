@@ -2156,6 +2156,217 @@ function updateLoginButtonByStatus() {
     }
 }
 
+// 전역: 처리되지 않은 Promise 거부 캐치 → 장치 분리시 사용자 안내
+if (typeof window !== 'undefined') {
+    window.addEventListener('unhandledrejection', (event) => {
+        // 장치 분리 안내 우선 처리
+        try {
+            if (handleDeviceLost(event.reason)) {
+                event.preventDefault?.();
+                return;
+            }
+        } catch {}
+
+        // 추가: 모든 미처리 거부를 에러 로그로 남김
+        try {
+            const reason = event && event.reason !== undefined ? event.reason : '(no reason)';
+            appendErrorLog(`[${nowTs()}] UNHANDLED_REJECTION ${__errorToText(reason)}`);
+        } catch {}
+    });
+
+    // 전역 런타임 에러 핸들링 → 파일에 기록
+    window.addEventListener('error', (ev) => {
+        try {
+            const msg = ev?.message || 'unknown error';
+            const src = ev?.filename || '';
+            const ln = ev?.lineno != null ? `:${ev.lineno}` : '';
+            const cn = ev?.colno != null ? `:${ev.colno}` : '';
+            const errTxt = __errorToText(ev?.error || msg);
+            appendErrorLog(`[${nowTs()}] WINDOW_ERROR ${src}${ln}${cn} ${errTxt}`);
+        } catch {}
+    });
+    // 초기 지점명 로드
+    loadDeviceConfig();
+    // 포인트 로그 내보내기: Ctrl+Alt+L
+    window.addEventListener('keydown', async (e) => {
+        // Ctrl+Alt+I: 로컬 ini 파일 선택해서 적용
+        if (e.ctrlKey && e.altKey && (e.key === 'i' || e.key === 'I')) {
+            try {
+                await pickAndLoadIni();
+            } catch (err) {
+                console.debug('INI 선택 중 오류(무시 가능):', err);
+            }
+            return;
+        }
+
+        if (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L')) {
+            try {
+                if (!navigator?.storage?.getDirectory) return alert('로그 파일 시스템 접근을 지원하지 않습니다.');
+                const root = await navigator.storage.getDirectory();
+                const dir = await root.getDirectoryHandle('petmon');
+                const file = await dir.getFileHandle('point_log.txt');
+                const blob = await file.getFile();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'point_log.txt';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }, 0);
+            } catch (err) {
+                alert('로그 파일이 아직 없습니다. (투입 후 생성됩니다)');
+            }
+        }
+        // Ctrl+Alt+E: 에러 로그 내보내기 (OPFS)
+        if (e.ctrlKey && e.altKey && (e.key === 'e' || e.key === 'E')) {
+            try {
+                if (!navigator?.storage?.getDirectory) return alert('에러 로그 내보내기를 지원하지 않습니다.');
+                const root = await navigator.storage.getDirectory();
+                const dir1 = await root.getDirectoryHandle('petmon');
+                const dir2 = await dir1.getDirectoryHandle('log');
+                const fh = await dir2.getFileHandle('errorlog.txt');
+                const blob = await fh.getFile();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'errorlog.txt';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }, 0);
+            } catch (err) {
+                alert('에러 로그가 아직 없습니다. (오류 발생 시 생성됩니다)');
+            }
+        }
+        // Ctrl+Alt+O: 에러 로그 파일 직접 지정(한 번만 설정하면 지속 사용)
+        if (e.ctrlKey && e.altKey && (e.key === 'o' || e.key === 'O')) {
+            try {
+                await setErrorLogFileManually();
+            } catch (err) {
+                console.error('에러 로그 파일 지정 실패:', err);
+            }
+        }
+    });
+    // 스크립트에서 수동 호출할 수 있도록 노출
+    window.setErrorLogFileManually = setErrorLogFileManually;
+    // 테스트 모드 토글/오류 트리거 + 관리자 모드 진입
+    const toggleBtn = document.getElementById('btn-toggle-test');
+    const errBtn = document.getElementById('btn-test-error');
+    const skipBtn = document.getElementById('btn-skip-cutter');
+    const testControls = document.getElementById('test-controls');
+    const adminTrigger = document.getElementById('admin-mode-trigger');
+
+    // 관리자 모드 전에는 숨김 (CSS에서도 기본값을 none으로 설정)
+    if (testControls) testControls.style.display = 'none';
+
+    function exitAdminMode() {
+        __testMode = false;
+        updateTestBadge();
+        if (testControls) testControls.style.display = 'none';
+        // [ADD] 관리자 모드 종료 시 세션 제거
+        try {
+            sessionStorage.removeItem('petmon.adminPinOK');
+        } catch {}
+    }
+
+    function ensureExitButton() {
+        if (!testControls) return;
+        let exitBtn = document.getElementById('btn-exit-admin');
+        if (!exitBtn) {
+            exitBtn = document.createElement('button');
+            exitBtn.id = 'btn-exit-admin';
+            exitBtn.textContent = '관리자모드 종료';
+            exitBtn.style.cssText =
+                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
+            exitBtn.addEventListener('click', exitAdminMode);
+            testControls.appendChild(exitBtn);
+        }
+
+        // [ADD] 새로고침 버튼
+        let refreshBtn = document.getElementById('btn-refresh-page');
+        if (!refreshBtn) {
+            refreshBtn = document.createElement('button');
+            refreshBtn.id = 'btn-refresh-page';
+            refreshBtn.textContent = '새로고침';
+            refreshBtn.style.cssText =
+                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
+            refreshBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+            testControls.appendChild(refreshBtn);
+        }
+    }
+
+    async function enterAdminMode() {
+        try {
+            // PIN 요구 (전역 유틸은 index.html에 정의)
+            if (window.requireAdminPin) {
+                const ok = await window.requireAdminPin();
+                if (!ok) return;
+                try {
+                    sessionStorage.setItem('petmon.adminPinOK', '1');
+                } catch {}
+            }
+        } catch {}
+        if (testControls) testControls.style.display = 'flex';
+        ensureExitButton();
+    }
+
+    // 1초 내 4회 연속 클릭 시 관리자 모드 진입
+    if (adminTrigger) {
+        let clicks = 0;
+        let timer = null;
+        adminTrigger.addEventListener('click', () => {
+            if (clicks === 0) {
+                timer = setTimeout(() => {
+                    clicks = 0;
+                    timer = null;
+                }, 1000);
+            }
+            clicks++;
+            if (clicks >= 4) {
+                clicks = 0;
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+                enterAdminMode();
+            }
+        });
+    }
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            __testMode = !__testMode;
+            updateTestBadge();
+            if (__testMode) {
+                if (!isConnected) installSimulator();
+            } else {
+                teardownSerial();
+            }
+        });
+    }
+    if (errBtn) {
+        errBtn.addEventListener('click', () => {
+            if (!__testMode) return alert('테스트 모드를 먼저 켜세요.');
+            showErrorScreen('테스트: 임의 오류 화면입니다.');
+        });
+    }
+    if (skipBtn) {
+        skipBtn.addEventListener('click', () => {
+            if (!__testMode) return alert('테스트 모드를 먼저 켜세요.');
+            // 띠 분리기 단계를 건너뛰도록 'Label cutting done'과 문 열림과 동일한 효과 트리거
+            simEnqueue('Label cutting done!', 100);
+            simEnqueue('Door will open', 200);
+            simEnqueue('Motor stopped.', 400);
+        });
+    }
+    updateTestBadge();
+}
 // [ADD] Bottom arrow helpers (tip+body with animation)
 function showBottomArrowAt(px) {
     try {
