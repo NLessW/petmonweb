@@ -352,7 +352,7 @@ async function loadDeviceConfig() {
         }
     } catch {}
     // 3) 같은 오리진에서 제공되는 ini 파일 시도
-    const candidates = ['/petmon.ini', '/config/petmon.ini'];
+    const candidates = ['/petmon.ini', '/config/petmon.ini', './petmon.ini', './config/petmon.ini'];
     for (const url of candidates) {
         try {
             const res = await fetch(url, { cache: 'no-store' });
@@ -2216,4 +2216,21 @@ function hideBottomArrow() {
         const el = document.getElementById('bottom-arrow');
         if (el) el.style.display = 'none';
     } catch {}
+}
+
+// ===== Boot: ensure device config is loaded on refresh =====
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            loadDeviceConfig();
+        } catch (e) {
+            console.error('config load failed:', e);
+        }
+    });
+} else {
+    try {
+        loadDeviceConfig();
+    } catch (e) {
+        console.error('config load failed:', e);
+    }
 }
