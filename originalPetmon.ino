@@ -156,14 +156,15 @@ void loop() {
         labelOpenTriggered = true;
     }
 
+    // 시리얼 명령 처리
     if (Serial1.available() > 0) {
-        String input = Serial1.readStringUntil('\n');
+        String input = Serial1.readString();
         input.trim();
 
         Serial1.print("Input received: ");
         Serial1.println(input);
 
-        // 로그인 명령 우선 처리
+        // [MOD] 로그인 분리: 98=ADMIN, 99=USER
         if (input == "98") {
             login = true;
             adminMode = true;
@@ -181,14 +182,7 @@ void loop() {
             return;
         }
 
-        // [핵심] 로그인 여부와 무관하게 X/L 즉시 처리
-        if (input.length() == 1) {
-            char c = input.charAt(0);
-            if (c == 'X' || c == 'x') { stopMotor(); return; }
-            if (c == 'L' || c == 'l') { logout();   return; }
-        }
-
-        // 관리자 전용 기능
+        // [MOD] 속도 설정은 관리자만
         if (input.startsWith("SPD:")) {
             if (!adminMode) {
                 Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
@@ -197,6 +191,8 @@ void loop() {
             parseAndSetSpeeds(input);
             return;
         }
+
+        // [MOD] 속도 조회도 관리자만
         if (input == "Q" || input == "q") {
             if (!adminMode) {
                 Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
@@ -206,7 +202,7 @@ void loop() {
             return;
         }
 
-        // 로그인 전 허용 명령
+        // 로그인되지 않은 상태에서는 도움말과 센서 상태만 허용
         if (!login) {
             if (input == "h" || input == "H") {
                 showLoginHelp();
@@ -220,7 +216,7 @@ void loop() {
             return;
         }
 
-        // 로그인 후 일반 명령
+        // 로그인된 상태에서만 실행되는 명령들
         if (input.length() == 1) {
             char command = input.charAt(0);
             switch(command) {
@@ -230,8 +226,12 @@ void loop() {
                 case '4': executeSensor2Motor(); break;
                 case '5': runAutoSequence(); break;
                 case '0': showSensorStatus(); break;
+                case 'X':
+                case 'x': stopMotor(); break;
                 case 'h':
                 case 'H': showHelp(); break;
+                case 'L':
+                case 'l': logout(); break;
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
             }
         } else {
@@ -577,7 +577,6 @@ void executeSensor1Motor() {
     
     if (seesaw_State2 == HIGH) {
         Serial1.println("Sensor2 is HIGH. Starting 24V motor (direction 1)...");
-
         unsigned long startMs = millis();
         while (seesaw_State2 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
@@ -774,4 +773,76 @@ void stopMotor(){
     Serial1.println("Knife deactivated.");
     Serial1.println("*** LOGGED OUT BY EMERGENCY STOP ***");
     Serial1.println("Enter '99' to login again");
+}
+
+void repairMode(){
+    // seesaw sensor 1,2 모두 HIGH 상태일 때, 복구 모드
+    // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
+    seesaw_State1 = digitalRead(seesaw_Sensor1);
+    seesaw_State2 = digitalRead(seesaw_Sensor2);
+    inverter_State = digitalRead(inverterPin);
+    if(seesaw_State1 == HIGH && seesaw_State2 == HIGH){
+        // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
+        if(inverter_State == HIGH) {
+            digitalWrite(fwdPin, HIGH);
+            Serial1.println("Repair mode activated: Inverter and FWD ON to clear jam.");
+        }else if(inverter_State == LOW){
+            digitalWrite(inverterPin, HIGH);
+            digitalWrite(fwdPin, HIGH);
+            Serial1.println("Repair mode activated: Inverter ON and FWD ON to clear jam.");
+        }
+        // seesaw sensor1 상태가 low가 된 후, 내렸을때 sensor2도 low가 됐을 때까지 seesaw 모터 작동. 다 정상일 시 sensor1에 닿게 하기
+        //만약 1분이 지나도 안되면 오류 처리, 테스트는 5초.
+        // 시소를 우선 올리고, 내리고 3초대기 후 다시 올리기
+
+        unsigned long startMs = millis();
+        while(true){
+            if(seesaw_State1 == LOW){
+                // 시소 내림
+                digitalWrite(in1_Pin, LOW);
+                digitalWrite(in2_Pin, HIGH);
+                analogWrite(ena_Pin, speed_D2); // 매 루프마다 최신 속도 적용
+                while(seesaw_State2 == HIGH){
+                    seesaw_State2 = digitalRead(seesaw_Sensor2);
+                    delay(50);
+                    if (millis() - startMs > 5000) {
+                        if(seesaw_State2 == HIGH){
+                            break;
+                        }else {
+                            // 시소 올림
+                            while (seesaw_State1 == LOW){
+                                seesaw_State1 = digitalRead(seesaw_Sensor1);
+                                digitalWrite(in1_Pin, HIGH);
+                                digitalWrite(in2_Pin, LOW);
+                                analogWrite(ena_Pin, speed_D1); // 매 루프마다 최신 속도 적용
+                                delay(50);
+                            }
+                        }
+                }
+            }
+            
+
+    } 
+    if (seesaw_state1 == LOW){
+        //시소 내림
+        while (seesaw_state2 == HIGH){
+            seesaw_state2 = digitalRead(seesaw_Sensor2);
+            digitalWrite(in1_Pin, LOW);
+            digitalWrite(in2_Pin, HIGH);
+            analogWrite(ena_Pin, speed_D2); // 매 루프마다 최신 속도 적용
+            delay(50);
+            if (seesaw_state2 == LOW){
+                //시소 올림
+                while (seesaw_state1 == LOW){
+                    seesaw_state1 = digitalRead(seesaw_Sensor1);
+                    digitalWrite(in1_Pin, HIGH);
+                    digitalWrite(in2_Pin, LOW);
+                    analogWrite(ena_Pin, speed_D1); // 매 루프마다 최신 속도 적용
+                    delay(50);
+                }
+                break;
+            }
+        }
+}
+break;
 }
