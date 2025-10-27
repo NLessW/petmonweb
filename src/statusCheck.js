@@ -6,39 +6,24 @@ document.getElementById('machine-status').innerText = '상태 확인 중...';
 function updateStartButton(enabled) {
     const btn = document.getElementById('login-button');
     if (!btn) return;
-    if (enabled) {
-        btn.disabled = false;
-        // 기존 스타일 유지: 비활성 때 덮어쓴 인라인 스타일 제거
-        btn.style.background = '';
-        btn.style.color = '';
+
+    // [GUARD] 점검/하드락이면 무조건 비활성
+    const inMaintenance = !!(window && window.__maintenanceMode);
+    const hardLock = !!(window && window.__hardLock);
+    const finalEnabled = !inMaintenance && !hardLock && !!enabled;
+
+    btn.disabled = !finalEnabled;
+    btn.setAttribute('aria-disabled', String(!finalEnabled));
+    if (finalEnabled) {
+        btn.classList.remove('is-disabled');
         btn.style.cursor = '';
         btn.style.opacity = '';
-        btn.classList.remove('is-disabled');
-        // 버튼 텍스트 원복 (이전에 저장해둔 텍스트가 있으면 복구)
-        if (btn.dataset.originalText) {
-            btn.textContent = btn.dataset.originalText;
-            delete btn.dataset.originalText;
-        }
-        // 접근성/툴팁 원복
-        btn.removeAttribute('title');
-        btn.setAttribute('aria-disabled', 'false');
     } else {
-        btn.disabled = true;
-        // 비활성화 시에만 회색 스타일 적용
-        btn.style.background = '#9ca3af';
-        btn.style.color = '#f3f4f6';
+        btn.classList.add('is-disabled');
         btn.style.cursor = 'not-allowed';
         btn.style.opacity = '0.9';
-        btn.classList.add('is-disabled');
-        // 현재 버튼 텍스트를 저장해두고, 비활성화 문구로 교체
-        if (!btn.dataset.originalText) {
-            btn.dataset.originalText = btn.textContent || '';
-        }
-        btn.textContent = '고객센터 : 1644-1224';
-        // 접근성/툴팁으로 추가 안내 제공
-        btn.title = '기기 점검 중이라 현재 시작할 수 없습니다.';
-        btn.setAttribute('aria-disabled', 'true');
     }
+    // 버튼 라벨은 index.js(updateLoginButtonByStatus)가 관리
 }
 
 // 아두이노 연결됨
@@ -189,12 +174,23 @@ window.stopPeriodicStatusCheck = function () {
     }
 };
 window.startPeriodicStatusCheck = function () {
-    if (!window.__maintenanceMode && !statusCheckInterval) {
-        periodicStatusCheck();
-    }
+    try {
+        clearInterval(statusCheckInterval);
+    } catch {}
+    // [GUARD] 하드락/점검 중에는 시작하지 않음
+    if (window.__maintenanceMode || window.__hardLock) return;
+    statusCheckInterval = setInterval(periodicStatusCheck, 10 * 60 * 1000);
+    // 즉시 1회 실행
+    periodicStatusCheck();
 };
 
 async function periodicStatusCheck() {
+    // [GUARD] 하드락/점검이면 아무 것도 하지 않음
+    if (window.__maintenanceMode || window.__hardLock) {
+        updateStartButton(false);
+        return;
+    }
+
     if (statusCheckInterval) {
         clearInterval(statusCheckInterval); // 기존 타이머 초기화
         statusCheckInterval = null;
