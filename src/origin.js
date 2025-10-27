@@ -288,7 +288,6 @@ function writeCmd(cmd) {
     }
 }
 
-// Removed Firebase initialization and database usage
 let currentPhoneNumber = '';
 let deviceConfig = { deviceCode: undefined, branchName: undefined };
 
@@ -444,6 +443,8 @@ async function pickAndLoadIni() {
 // 전역에 노출(핫키에서 호출)
 if (typeof window !== 'undefined') {
     window.pickAndLoadIni = pickAndLoadIni;
+    // 초기 지점명/기기코드/group_cd 로드 (origin.js와 동일하게 적용)
+    loadDeviceConfig();
 }
 
 // 투입 횟수 누적 및 최종 처리 상태
@@ -779,6 +780,9 @@ async function finalizeAndReturnHome() {
 
 // ========== 화면 전환 ==========
 function showScreen(screenId) {
+    // [ADD] ensure arrow hidden on any screen switch
+    hideBottomArrow();
+
     document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
     document.getElementById(screenId).style.display = 'flex';
 
@@ -992,7 +996,7 @@ function showErrorScreen(message) {
     const arduinoStatus = document.getElementById('arduino-status');
     const machineStatus = document.getElementById('machine-status');
     if (arduinoStatus) {
-        arduinoStatus.textContent = '기기 에러';
+        arduinoStatus.textContent = '준비 중';
         arduinoStatus.style.color = '#ff4d4d';
     }
     if (machineStatus) {
@@ -1092,9 +1096,7 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             iconKey === 'label'
                 ? `<svg width="90" height="90" viewBox="0 0 90 90" fill="none" aria-hidden="true">
                                  <circle cx="45" cy="45" r="14" fill="#ffffff" stroke="#3772ff" stroke-width="4"/>
-                                 <!-- 위: 세로로 긴 삼각형(아래로 향함) -->
                                  <polygon points="40,18 50,18 45,38" fill="#f59e0b" stroke="#fbbf24" stroke-width="2"/>
-                                 <!-- 아래: 세로로 긴 삼角형(위로 향함) -->
                                  <polygon points="40,72 50,72 45,52" fill="#f59e0b" stroke="#fbbf24" stroke-width="2"/>
                              </svg>`
                 : `<img src="${iconUrl}" alt="${iconAlt || ''}" width="90" height="90"/>`;
@@ -1117,7 +1119,6 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             );
             box.classList.add(`theme-${accent}`);
         }
-        // 진행도 업데이트
         const fill = document.getElementById('process-progress-fill');
         if (fill) {
             let pct = 0;
@@ -1127,6 +1128,13 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             else if (iconKey === 'scan') pct = 75;
             else if (iconKey === 'collect') pct = 95;
             fill.style.width = pct + '%';
+        }
+
+        // [ADD] show bottom arrow only for the label step
+        if (iconKey === 'label') {
+            showBottomArrowAt(1047);
+        } else {
+            hideBottomArrow();
         }
     } catch (e) {
         // 안전 장치: 렌더 실패 시 텍스트만
@@ -1146,6 +1154,9 @@ const SVG_CLOSE = `
  </svg>`;
 
 function renderOpenDoorOriginal(messageHtml) {
+    // [ADD] hide arrow when leaving label step
+    hideBottomArrow();
+
     processMessage.innerHTML = `
         <div class="process-hero accent-open">
             <div class="icon-bubble">${SVG_OPEN}</div>
@@ -1162,6 +1173,9 @@ function renderOpenDoorOriginal(messageHtml) {
 }
 
 function renderCloseDoorOriginal(messageText) {
+    // [ADD] hide arrow when leaving label step
+    hideBottomArrow();
+
     processMessage.innerHTML = `
         <div class="process-hero accent-close">
             <div class="icon-bubble">${SVG_CLOSE}</div>
@@ -2351,4 +2365,67 @@ if (typeof window !== 'undefined') {
         });
     }
     updateTestBadge();
+}
+// [ADD] Bottom arrow helpers (tip+body with animation)
+function showBottomArrowAt(px) {
+    try {
+        // Inject styles once
+        if (!document.getElementById('bottom-arrow-style')) {
+            const style = document.createElement('style');
+            style.id = 'bottom-arrow-style';
+            style.innerHTML = `
+                #bottom-arrow {
+                    position: fixed;
+                    bottom: 12px;                   /* lift a bit above the edge */
+                    pointer-events: none;
+                    z-index: 9999;
+                    display: block;
+                    /* Base transform includes -50% X centering; animation adjusts Y only */
+                    transform: translate(-50%, 0);
+                    animation: arrow-bob 1.3s ease-in-out infinite;
+                }
+                #bottom-arrow .shaft {
+                    width: 14px;                    /* thicker body */
+                    height: 70px;                   /* taller body */
+                    background: var(--arrow-color, #3772ff);
+                    margin: 0 auto;
+                    box-shadow: 0 2px 4px rgba(0,0,0,.35);
+                }
+                #bottom-arrow .head {
+                    width: 0;
+                    height: 0;
+                    border-left: 22px solid transparent;
+                    border-right: 22px solid transparent;
+                    border-top: 28px solid var(--arrow-color, #3772ff); /* bigger tip */
+                    filter: drop-shadow(0 2px 4px rgba(0,0,0,.35));
+                }
+                @keyframes arrow-bob {
+                    0%, 100% { transform: translate(-50%, 0); }
+                    50%      { transform: translate(-50%, -12px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        let el = document.getElementById('bottom-arrow');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'bottom-arrow';
+            // tip + body
+            el.innerHTML = `
+                <div class="shaft"></div>
+                <div class="head"></div>
+            `;
+            document.body.appendChild(el);
+        }
+        el.style.left = px + 'px';
+        el.style.display = 'block';
+    } catch {}
+}
+
+function hideBottomArrow() {
+    try {
+        const el = document.getElementById('bottom-arrow');
+        if (el) el.style.display = 'none';
+    } catch {}
 }

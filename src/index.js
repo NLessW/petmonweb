@@ -47,6 +47,17 @@ let __errorShownOnce = false;
 const MEMBER_API_URL = 'https://petcycle.mycafe24.com/member_api.php';
 const POINT_API_URL = 'https://petcycle.mycafe24.com/point_api.php';
 
+function updateTestBadge() {
+    const b = document.getElementById('test-mode-badge');
+    if (!b) return;
+    if (__testMode) {
+        b.textContent = '테스트모드: ON';
+        b.style.color = '#86efac';
+    } else {
+        b.textContent = '테스트모드: OFF';
+        b.style.color = '#fca5a5';
+    }
+}
 // [ADD] UUID v4 생성 (member/point API용 unique key). group_cd를 prefix로 붙임
 function secureUuid(prefix = '') {
     try {
@@ -616,6 +627,78 @@ function __errorToText(err) {
     }
 }
 
+async function chooseSerialPort() {
+    try {
+        if (!('serial' in navigator)) {
+            alert('이 브라우저는 Web Serial API를 지원하지 않습니다. Chrome/Edge 최신 버전을 사용해주세요.');
+            return;
+        }
+        // 1) 포트 선택 대화상자 열기
+        const selected = await navigator.serial.requestPort();
+
+        // 2) 이전 포트 정리
+        if (port && port !== selected) {
+            try {
+                if (reader) {
+                    await reader.cancel();
+                    reader.releaseLock();
+                }
+            } catch {}
+            try {
+                if (writer) writer.releaseLock();
+            } catch {}
+            try {
+                await port.close();
+            } catch {}
+        }
+
+        // 3) 새 포트로 연결/스트림 구성
+        port = selected;
+        if (!port.readable && !port.writable) {
+            await port.open({ baudRate: 9600 });
+        }
+        const decoder = new TextDecoderStream();
+        port.readable.pipeTo(decoder.writable);
+        reader = decoder.readable.getReader();
+
+        const encoder = new TextEncoderStream();
+        encoder.readable.pipeTo(port.writable);
+        writer = encoder.writable.getWriter();
+
+        isConnected = true;
+
+        // UI 상태 갱신 (하드락 시 유지보수 해제 금지)
+        const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex';
+        const hardLock = !!(typeof window !== 'undefined' && window.__hardLock);
+        if (window && !isErrorVisible && !hardLock) {
+            window.__maintenanceMode = false;
+            if (window.startPeriodicStatusCheck) window.startPeriodicStatusCheck();
+        }
+        const arduinoStatus = document.getElementById('arduino-status');
+        const machineStatus = document.getElementById('machine-status');
+        if (arduinoStatus) {
+            arduinoStatus.textContent = '정상';
+            arduinoStatus.style.color = '#00ff4c';
+        }
+        if (machineStatus) {
+            machineStatus.textContent = '가능';
+            machineStatus.style.color = '#00ff4c';
+        }
+        if (document.getElementById('main-screen')?.style.display === 'flex') {
+            updateLoginButtonByStatus(); // 링크: [`updateLoginButtonByStatus`](src/index.js)
+        }
+    } catch (err) {
+        console.error('포트 선택 실패:', err);
+        showConfirmModal({
+            title: '포트 선택 실패',
+            lines: [String(err?.message || err)],
+            yesText: '확인',
+            noText: '닫기',
+            onYes: () => {},
+            onNo: () => {},
+        });
+    }
+}
 async function appendErrorLog(line) {
     // 0) 사용자가 지정한 파일(지속 핸들)로 먼저 시도
     try {
@@ -2373,6 +2456,18 @@ if (typeof window !== 'undefined') {
                 window.location.reload();
             });
             testControls.appendChild(refreshBtn);
+        }
+        let chooseBtn = document.getElementById('btn-choose-serial');
+        if (!chooseBtn) {
+            chooseBtn = document.createElement('button');
+            chooseBtn.id = 'btn-choose-serial';
+            chooseBtn.textContent = '포트 선택(목록)';
+            chooseBtn.style.cssText =
+                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
+            chooseBtn.addEventListener('click', async () => {
+                await chooseSerialPort(); // 선택 창 열기
+            });
+            testControls.appendChild(chooseBtn);
         }
     }
 

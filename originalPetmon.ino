@@ -777,72 +777,118 @@ void stopMotor(){
 
 void repairMode(){
     // seesaw sensor 1,2 모두 HIGH 상태일 때, 복구 모드
-    // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
     seesaw_State1 = digitalRead(seesaw_Sensor1);
     seesaw_State2 = digitalRead(seesaw_Sensor2);
     inverter_State = digitalRead(inverterPin);
+    
     if(seesaw_State1 == HIGH && seesaw_State2 == HIGH){
         // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
         if(inverter_State == HIGH) {
             digitalWrite(fwdPin, HIGH);
             Serial1.println("Repair mode activated: Inverter and FWD ON to clear jam.");
-        }else if(inverter_State == LOW){
+        } else if(inverter_State == LOW){
             digitalWrite(inverterPin, HIGH);
             digitalWrite(fwdPin, HIGH);
             Serial1.println("Repair mode activated: Inverter ON and FWD ON to clear jam.");
         }
-        // seesaw sensor1 상태가 low가 된 후, 내렸을때 sensor2도 low가 됐을 때까지 seesaw 모터 작동. 다 정상일 시 sensor1에 닿게 하기
-        //만약 1분이 지나도 안되면 오류 처리, 테스트는 5초.
-        // 시소를 우선 올리고, 내리고 3초대기 후 다시 올리기
-
-        unsigned long startMs = millis();
-        while(true){
-            if(seesaw_State1 == LOW){
-                // 시소 내림
+        
+        // 시소 복구 시퀀스 시작
+        unsigned long totalStartMs = millis();
+        bool repairSuccess = false;
+        int attemptCount = 0;
+        const int maxAttempts = 10; // 최대 10회 시도
+        
+        while(!repairSuccess && attemptCount < maxAttempts && (millis() - totalStartMs < 60000)){
+            attemptCount++;
+            Serial1.print("Repair attempt #");
+            Serial1.println(attemptCount);
+            
+            // 1단계: 시소를 내려서 sensor2가 LOW가 될 때까지 대기
+            Serial1.println("Step 1: Lowering seesaw until sensor2 is LOW");
+            unsigned long startMs = millis();
+            seesaw_State2 = digitalRead(seesaw_Sensor2);
+            
+            while(seesaw_State2 == HIGH && (millis() - startMs < 5000)){
+                seesaw_State2 = digitalRead(seesaw_Sensor2);
                 digitalWrite(in1_Pin, LOW);
                 digitalWrite(in2_Pin, HIGH);
-                analogWrite(ena_Pin, speed_D2); // 매 루프마다 최신 속도 적용
-                while(seesaw_State2 == HIGH){
-                    seesaw_State2 = digitalRead(seesaw_Sensor2);
-                    delay(50);
-                    if (millis() - startMs > 5000) {
-                        if(seesaw_State2 == HIGH){
-                            break;
-                        }else {
-                            // 시소 올림
-                            while (seesaw_State1 == LOW){
-                                seesaw_State1 = digitalRead(seesaw_Sensor1);
-                                digitalWrite(in1_Pin, HIGH);
-                                digitalWrite(in2_Pin, LOW);
-                                analogWrite(ena_Pin, speed_D1); // 매 루프마다 최신 속도 적용
-                                delay(50);
-                            }
-                        }
-                }
+                analogWrite(ena_Pin, speed_D1);
+                delay(50);
             }
             
-
-    } 
-    if (seesaw_state1 == LOW){
-        //시소 내림
-        while (seesaw_state2 == HIGH){
-            seesaw_state2 = digitalRead(seesaw_Sensor2);
-            digitalWrite(in1_Pin, LOW);
-            digitalWrite(in2_Pin, HIGH);
-            analogWrite(ena_Pin, speed_D2); // 매 루프마다 최신 속도 적용
-            delay(50);
-            if (seesaw_state2 == LOW){
-                //시소 올림
-                while (seesaw_state1 == LOW){
-                    seesaw_state1 = digitalRead(seesaw_Sensor1);
+            // Timeout 발생 시 다시 올리기
+            if(seesaw_State2 == HIGH){
+                Serial1.println("Timeout: sensor2 still HIGH, raising seesaw again");
+                startMs = millis();
+                
+                while((millis() - startMs < 5000)){
                     digitalWrite(in1_Pin, HIGH);
                     digitalWrite(in2_Pin, LOW);
-                    analogWrite(ena_Pin, speed_D1); // 매 루프마다 최신 속도 적용
+                    analogWrite(ena_Pin, speed_D1);
                     delay(50);
                 }
-                break;
+                
+                // 모터 잠깐 정지
+                digitalWrite(in1_Pin, LOW);
+                digitalWrite(in2_Pin, LOW);
+                delay(500);
+                
+                continue; // 다음 시도로
+            }
+            
+            // 2단계: sensor2가 LOW가 되면 시소를 올려서 sensor1이 LOW가 될 때까지
+            if(seesaw_State2 == LOW){
+                Serial1.println("Step 2: Sensor2 LOW detected, raising seesaw until sensor1 is LOW");
+                startMs = millis();
+                seesaw_State1 = digitalRead(seesaw_Sensor1);
+                
+                while(seesaw_State1 == HIGH && (millis() - startMs < 5000)){
+                    seesaw_State1 = digitalRead(seesaw_Sensor1);
+                    digitalWrite(in1_Pin, HIGH);
+                    digitalWrite(in2_Pin, LOW);
+                    analogWrite(ena_Pin, speed_D1);
+                    delay(50);
+                }
+                
+                if(seesaw_State1 == LOW){
+                    repairSuccess = true;
+                    Serial1.println("Seesaw repair sequence completed successfully.");
+                    break;
+                } else {
+                    Serial1.println("Timeout: sensor1 still HIGH, retrying");
+                    delay(500);
+                }
             }
         }
-}
-break;
+        
+        // 모터 정지
+        digitalWrite(in1_Pin, LOW);
+        digitalWrite(in2_Pin, LOW);
+        analogWrite(ena_Pin, 0);
+        
+        // 복구 성공 시 인버터 3초 더 돌리기
+        if(repairSuccess){
+            Serial1.println("Running inverter for 3 more seconds to complete jam clearance...");
+            delay(3000);
+            
+            // FWD 및 Inverter 신호 종료
+            digitalWrite(fwdPin, LOW);
+            if(inverter_State == LOW){
+                digitalWrite(inverterPin, LOW);
+            }
+            
+            Serial1.println("Repair mode completed successfully. System restored to normal operation.");
+        } else {
+            // 복구 실패 시 에러 처리
+            Serial1.println("ERROR: Repair mode failed after maximum attempts or timeout.");
+            Serial1.print("Total attempts: ");
+            Serial1.println(attemptCount);
+            
+            // FWD 및 Inverter 신호 종료
+            digitalWrite(fwdPin, LOW);
+            if(inverter_State == LOW){
+                digitalWrite(inverterPin, LOW);
+            }
+        }
+    }
 }
