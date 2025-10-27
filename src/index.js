@@ -288,7 +288,6 @@ function writeCmd(cmd) {
     }
 }
 
-// Removed Firebase initialization and database usage
 let currentPhoneNumber = '';
 let deviceConfig = { deviceCode: undefined, branchName: undefined };
 
@@ -997,7 +996,7 @@ function showErrorScreen(message) {
     const arduinoStatus = document.getElementById('arduino-status');
     const machineStatus = document.getElementById('machine-status');
     if (arduinoStatus) {
-        arduinoStatus.textContent = '기기 에러';
+        arduinoStatus.textContent = '준비 중';
         arduinoStatus.style.color = '#ff4d4d';
     }
     if (machineStatus) {

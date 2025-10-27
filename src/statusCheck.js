@@ -56,7 +56,7 @@ function setArduinoConnected() {
 // 아두이노 연결 끊김
 function setArduinoDisconnected() {
     const statusElement = document.getElementById('arduino-status');
-    statusElement.innerText = '준비중';
+    statusElement.innerText = '접속 중';
     statusElement.style.color = '#ff4d4d'; // 빨간색
     const machineStatusElement = document.getElementById('machine-status');
     machineStatusElement.innerText = '투입 불가';
