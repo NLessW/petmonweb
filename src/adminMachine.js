@@ -43,6 +43,7 @@ function setConnected(on) {
     connDot.classList.toggle('on', on);
     connText.textContent = on ? 'CONNECTED' : 'DISCONNECTED';
     document.getElementById('btn-login').disabled = !on;
+    document.getElementById('btn-repair').disabled = !on;
     document.getElementById('btn-connect').disabled = false;
     document.getElementById('btn-help').disabled = !on;
 }
@@ -186,6 +187,7 @@ document.getElementById('btn-connect').onclick = connect;
 document.getElementById('btn-login').onclick = () => send('98');
 document.getElementById('btn-help').onclick = () => send('h');
 document.getElementById('btn-query').onclick = () => send('Q');
+document.getElementById('btn-repair').onclick = () => send('R');
 document.getElementById('btn-logout').onclick = () => send('L');
 document.getElementById('btn-go-main').onclick = async (e) => {
     e.target.disabled = true;
