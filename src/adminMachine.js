@@ -43,6 +43,7 @@ function setConnected(on) {
     connDot.classList.toggle('on', on);
     connText.textContent = on ? 'CONNECTED' : 'DISCONNECTED';
     document.getElementById('btn-login').disabled = !on;
+    document.getElementById('btn-99login').disabled = !on;
     document.getElementById('btn-repair').disabled = !on;
     document.getElementById('btn-connect').disabled = false;
     document.getElementById('btn-help').disabled = !on;
@@ -185,6 +186,7 @@ async function gracefulDisconnect(goHome = false) {
 // 버튼 이벤트
 document.getElementById('btn-connect').onclick = connect;
 document.getElementById('btn-login').onclick = () => send('98');
+document.getElementById('btn-99login').onclick = () => send('99');
 document.getElementById('btn-help').onclick = () => send('h');
 document.getElementById('btn-query').onclick = () => send('Q');
 document.getElementById('btn-repair').onclick = () => send('R');
