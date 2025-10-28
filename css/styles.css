@@ -744,3 +744,31 @@ h3 {
 
 /* 프로세스 단계 표시 */
 /* (Reverted stepper/subtext/actions styles) */
+
+/* QR 캡션 + 버튼 묶음 */
+.qr-widget {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 999;
+}
+
+/* 기존 secret-exit의 position이 고정이면 래퍼 안에서 자연스럽게 배치되도록 재설정 */
+.qr-widget .secret-exit {
+    position: static !important;
+}
+
+.qr-widget .qr-caption {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0b1220;
+    background: rgba(255, 255, 255, 0.92);
+    padding: 4px 10px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    pointer-events: none; /* 클릭은 QR 버튼에만 가도록 */
+}

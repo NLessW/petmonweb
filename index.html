@@ -228,7 +228,12 @@
         <script type="module" src="./src/index.js"></script>
         <script src="./src/statusCheck.js"></script>
         <script src="./src/time.js"></script>
-        <button id="secret-exit-btn" class="secret-exit" aria-label="Exit"><img src="./img/petmon_QR.png" /></button>
+        <div class="qr-widget" aria-label="PETMON QR">
+            <div class="qr-caption">포인트 확인</div>
+            <button id="secret-exit-btn" class="secret-exit" aria-label="포인트 내역 확인">
+                <img src="./img/petmon_QR.png" alt="포인트 내역 확인 QR" />
+            </button>
+        </div>
         <!-- 숨겨진 관리자 진입 트리거 (4회 클릭) -->
         <button id="admin-hidden-trigger" aria-label="Admin Hidden Trigger"></button>
         <!-- Externalized inline scripts -->
