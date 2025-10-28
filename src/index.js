@@ -302,6 +302,52 @@ function writeCmd(cmd) {
 let currentPhoneNumber = '';
 let deviceConfig = { deviceCode: undefined, branchName: undefined };
 
+// [ADD] Prefer specific USB-Serial chips (PL2303 a.k.a. "USB-Serial Controller", plus common fallbacks)
+const PREFERRED_USB_DEVICES = [
+    { vid: 0x067b, pid: 0x2303, label: 'Prolific PL2303 (USB-Serial Controller)' }, // main target
+    { vid: 0x1a86, pid: 0x7523, label: 'CH340/CH341' },
+    { vid: 0x0403, pid: 0x6001, label: 'FTDI FT232R' },
+    { vid: 0x10c4, pid: 0xea60, label: 'Silicon Labs CP210x' },
+];
+
+function getPreferredFilters() {
+    try {
+        const sv = Number(localStorage.getItem('petmon.usb.vid'));
+        const sp = Number(localStorage.getItem('petmon.usb.pid'));
+        const filters = [];
+        if (sv && sp) filters.push({ usbVendorId: sv, usbProductId: sp });
+        else PREFERRED_USB_DEVICES.forEach((d) => filters.push({ usbVendorId: d.vid, usbProductId: d.pid }));
+        return filters;
+    } catch {
+        return [];
+    }
+}
+
+function matchesPreferred(port) {
+    try {
+        const info = port.getInfo?.() || {};
+        const v = info.usbVendorId;
+        const p = info.usbProductId;
+        if (!v || !p) return false;
+        const sv = Number(localStorage.getItem('petmon.usb.vid'));
+        const sp = Number(localStorage.getItem('petmon.usb.pid'));
+        if (sv && sp) return v === sv && p === sp;
+        return PREFERRED_USB_DEVICES.some((d) => d.vid === v && d.pid === p);
+    } catch {
+        return false;
+    }
+}
+
+function rememberPreferred(port) {
+    try {
+        const info = port.getInfo?.() || {};
+        if (info.usbVendorId && info.usbProductId) {
+            localStorage.setItem('petmon.usb.vid', String(info.usbVendorId));
+            localStorage.setItem('petmon.usb.pid', String(info.usbProductId));
+        }
+    } catch {}
+}
+
 // ====== 로컬 ini 파일(C:\\petmon.ini)에서 지점명/기기코드 읽기 ======
 // 대신, index.html과 동일한 오리진에서 petmon.ini를 정적 제공하거나(권장, 루트에 배치)
 //  1) /petmon.ini (서비스 루트)
@@ -2407,6 +2453,16 @@ if (typeof window !== 'undefined') {
             } catch (err) {
                 console.error('에러 로그 파일 지정 실패:', err);
             }
+        }
+
+        // [ADD] Ctrl+Alt+P: 저장된 선호 USB 장치 초기화
+        if (e.ctrlKey && e.altKey && (e.key === 'p' || e.key === 'P')) {
+            try {
+                localStorage.removeItem('petmon.usb.vid');
+                localStorage.removeItem('petmon.usb.pid');
+                alert('시리얼 자동 페어링 대상이 초기화되었습니다.');
+            } catch {}
+            return;
         }
     });
     // 스크립트에서 수동 호출할 수 있도록 노출
