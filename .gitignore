@@ -51,3 +51,7 @@ stylelintcache
 # Misc
 *.tgz
 node_modules
+
+# source
+# originalPetmon
+originalPetmon/*
