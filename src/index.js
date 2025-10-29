@@ -2454,16 +2454,6 @@ if (typeof window !== 'undefined') {
                 console.error('에러 로그 파일 지정 실패:', err);
             }
         }
-
-        // // [ADD] Ctrl+Alt+P: 저장된 선호 USB 장치 초기화
-        // if (e.ctrlKey && e.altKey && (e.key === 'p' || e.key === 'P')) {
-        //     try {
-        //         localStorage.removeItem('petmon.usb.vid');
-        //         localStorage.removeItem('petmon.usb.pid');
-        //         alert('시리얼 자동 페어링 대상이 초기화되었습니다.');
-        //     } catch {}
-        //     return;
-        // }
     });
     // 스크립트에서 수동 호출할 수 있도록 노출
     window.setErrorLogFileManually = setErrorLogFileManually;
