@@ -1,6 +1,6 @@
-// 상태 확인 중...
-document.getElementById('arduino-status').innerText = '상태 확인 중...';
-document.getElementById('machine-status').innerText = '상태 확인 중...';
+// // 상태 확인 중...
+// document.getElementById('arduino-status').innerText = '상태 확인 중...';
+// document.getElementById('machine-status').innerText = '상태 확인 중...';
 
 // 시작하기 버튼 상태 업데이트 헬퍼
 function updateStartButton(enabled) {
