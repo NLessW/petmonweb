@@ -230,6 +230,8 @@ void loop() {
                 case 'x': stopMotor(); break;
                 case 'h':
                 case 'H': showHelp(); break;
+                case 'r':
+                case 'R': repairMode(); break;
                 case 'L':
                 case 'l': logout(); break;
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
