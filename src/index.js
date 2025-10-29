@@ -954,9 +954,9 @@ function showScreen(screenId) {
             if (fill) fill.style.width = '0%';
 
             // X 전송 후 새로고침
-            setTimeout(() => {
-                window.location.reload();
-            }, 100);
+            // setTimeout(() => {
+            //     window.location.reload();
+            // }, 100);
         })();
 
         return; // 이후 코드 실행 방지
