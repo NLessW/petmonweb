@@ -928,6 +928,38 @@ function showScreen(screenId) {
     if (screenId === 'main-screen' && loginButton) {
         loginPopup.style.display = 'none';
         updateLoginButtonByStatus();
+
+        // [CHG] X 신호 전송 후 새로고침
+        (async () => {
+            if (writer) {
+                try {
+                    await writeCmd('X');
+                    console.log('메인 화면 복귀: X 신호 전송 완료');
+                } catch (e) {
+                    console.error('메인 화면 복귀 시 X 전송 실패:', e);
+                }
+            }
+
+            // 테스트 모드 시 잔여 큐 비우기
+            if (__testMode) {
+                __simQueue = [];
+                __simPaused = false;
+            }
+
+            // 세션 초기화
+            phoneNumberInput.value = '';
+            currentPhoneNumber = '';
+            depositCount = 0;
+            const fill = document.getElementById('process-progress-fill');
+            if (fill) fill.style.width = '0%';
+
+            // X 전송 후 새로고침
+            setTimeout(() => {
+                window.location.reload();
+            }, 100);
+        })();
+
+        return; // 이후 코드 실행 방지
     }
 
     if (screenId === 'end-screen') {
@@ -1082,9 +1114,9 @@ function showScreen(screenId) {
             try {
                 writeCmd('X');
                 // 화면 복귀 후 새로고침으로 초기화
-                window.addEventListener('click', () => {
-                    window.location.reload();
-                });
+                // window.addEventListener('click', () => {
+                //     window.location.reload();
+                // });
             } catch (e) {
                 console.error('메인 화면 복귀 시 X 전송 실패:', e);
             }
@@ -2363,23 +2395,38 @@ function updateLoginButtonByStatus() {
     }
 }
 
-// 전역: 처리되지 않은 Promise 거부 캐치 → 장치 분리시 사용자 안내
+// [NEW] 페이지 로드 시 자동 새로고침 (최초 1회만)
 if (typeof window !== 'undefined') {
-    window.addEventListener('unhandledrejection', (event) => {
-        // 장치 분리 안내 우선 처리
-        try {
-            if (handleDeviceLost(event.reason)) {
-                event.preventDefault?.();
-                return;
-            }
-        } catch {}
+    // sessionStorage로 새로고침 루프 방지
+    const hasReloaded = sessionStorage.getItem('petmon.hasReloaded');
 
-        // 추가: 모든 미처리 거부를 에러 로그로 남김
-        try {
-            const reason = event && event.reason !== undefined ? event.reason : '(no reason)';
-            appendErrorLog(`[${nowTs()}] UNHANDLED_REJECTION ${__errorToText(reason)}`);
-        } catch {}
+    if (!hasReloaded) {
+        sessionStorage.setItem('petmon.hasReloaded', '1');
+
+        // 페이지 로드 완료 후 즉시 새로고침
+        // window.addEventListener('load', () => {
+        //     setTimeout(() => {
+        //         window.location.reload();
+        //     }, 500);
+        // });
+    }
+
+    // 메인 화면 표시 시 세션 플래그 제거 (다음 방문을 위해)
+    const observer = new MutationObserver(() => {
+        const mainScreen = document.getElementById('main-screen');
+        if (mainScreen && mainScreen.style.display === 'flex') {
+            sessionStorage.removeItem('petmon.hasReloaded');
+        }
     });
+
+    // DOM 변화 감지
+    if (document.body) {
+        observer.observe(document.body, {
+            attributes: true,
+            subtree: true,
+            attributeFilter: ['style'],
+        });
+    }
 
     // 전역 런타임 에러 핸들링 → 파일에 기록
     window.addEventListener('error', (ev) => {
