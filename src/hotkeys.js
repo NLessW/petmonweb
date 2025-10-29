@@ -57,8 +57,8 @@
         } else {
             // 잠금/기기점검이 아니면 기본 상태로 복구
             if (!window.__deviceLocked && !window.__maintenanceMode) {
-                ar.innerText = '상태 확인 중...';
-                ms.innerText = '상태 확인 중...';
+                ar.innerText = '정상';
+                ms.innerText = '가능';
                 try {
                     ar.style.color = '';
                     ms.style.color = '';

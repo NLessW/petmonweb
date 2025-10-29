@@ -108,11 +108,11 @@
             const as = document.getElementById('arduino-status');
             const ms = document.getElementById('machine-status');
             if (as) {
-                as.textContent = '상태 확인 중...';
+                as.textContent = '정상';
                 as.style.color = '';
             }
             if (ms) {
-                ms.textContent = '상태 확인 중...';
+                ms.textContent = '가능';
                 ms.style.color = '';
             }
         } catch {}
