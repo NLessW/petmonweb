@@ -1081,6 +1081,10 @@ function showScreen(screenId) {
         if (writer) {
             try {
                 writeCmd('X');
+                // 화면 복귀 후 새로고침으로 초기화
+                window.addEventListener('click', () => {
+                    window.location.reload();
+                });
             } catch (e) {
                 console.error('메인 화면 복귀 시 X 전송 실패:', e);
             }
