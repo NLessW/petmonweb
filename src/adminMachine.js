@@ -153,7 +153,6 @@ async function gracefulDisconnect(goHome = false) {
     try {
         // 최신 속도 1회 더 전송 (이미 동일값이면 EEPROM 미작성)
         sendCurrentSpeeds(true);
-        ㄹ;
     } catch (e) {
         /* ignore */
     }
@@ -377,10 +376,59 @@ if (!('serial' in navigator)) {
 const DEV_FLAG = 'petmon.deviceMaintenance';
 const GBL_FLAG = 'petmon.globalMaintenance';
 
+// 변경사항: 상태 변경 브로드캐스트 유틸
+function broadcastMaintChange() {
+    try {
+        // 동일 탭/다른 탭 모두 반응하도록 localStorage ping
+        localStorage.setItem('__petmon_maint_bcast', String(Date.now()));
+    } catch {}
+    try {
+        window.dispatchEvent(
+            new CustomEvent('petmon:maintenance-change', {
+                detail: {
+                    device: sessionStorage.getItem(DEV_FLAG) === '1' || !!window.__maintenanceMode,
+                    global: sessionStorage.getItem(GBL_FLAG) === '1',
+                },
+            })
+        );
+    } catch {}
+}
+// (추가) 플래그 헬퍼 + UI 반영
+function isDeviceMaintOn() {
+    return sessionStorage.getItem(DEV_FLAG) === '1' || !!window.__maintenanceMode;
+}
+function isGlobalMaintOn() {
+    return sessionStorage.getItem(GBL_FLAG) === '1';
+}
+function setStatus(el, text, cls) {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('status-green', 'status-yellow', 'status-red');
+    if (cls) el.classList.add(cls);
+}
+function applyMaintToStatusUI() {
+    try {
+        const on = isDeviceMaintOn() || isGlobalMaintOn();
+        const arduinoEl = document.getElementById('arduino-status');
+        const machineEl = document.getElementById('machine-status');
+        const startBtn = document.getElementById('login-button');
+
+        if (on) {
+            setStatus(arduinoEl, '준비중', 'status-yellow');
+            setStatus(machineEl, '불가능', 'status-red');
+            if (startBtn) startBtn.disabled = true;
+        } else {
+            setStatus(arduinoEl, '정상', 'status-green');
+            setStatus(machineEl, '가능', 'status-green');
+            if (startBtn) startBtn.disabled = false;
+        }
+    } catch {}
+}
+
 function reflectMaintButtons() {
     try {
-        const devOn = sessionStorage.getItem(DEV_FLAG) === '1' || !!window.__maintenanceMode;
-        const gblOn = sessionStorage.getItem(GBL_FLAG) === '1';
+        const devOn = isDeviceMaintOn();
+        const gblOn = isGlobalMaintOn();
         const bDev = document.getElementById('btn-maint-device');
         const bGbl = document.getElementById('btn-maint-global');
         if (bDev) {
@@ -393,6 +441,8 @@ function reflectMaintButtons() {
             bGbl.style.outline = gblOn ? '2px solid #fca5a5' : '';
             bGbl.style.background = gblOn ? '#7f1d1d' : '';
         }
+        // (추가) 상태 카드/시작 버튼 동기화
+        applyMaintToStatusUI();
     } catch {}
 }
 
@@ -400,9 +450,11 @@ function setDeviceMaintenance(on) {
     try {
         sessionStorage.setItem(DEV_FLAG, on ? '1' : '0');
     } catch {}
-    // index/statusCheck 에서 참조하는 전역 플래그도 즉시 반영
+    // index에서도 읽을 수 있도록 세션 기반 유지 + 전역 힌트
     window.__maintenanceMode = !!on;
     reflectMaintButtons();
+    // 변경 알림
+    broadcastMaintChange();
 }
 
 function setGlobalMaintenance(on) {
@@ -410,6 +462,8 @@ function setGlobalMaintenance(on) {
         sessionStorage.setItem(GBL_FLAG, on ? '1' : '0');
     } catch {}
     reflectMaintButtons();
+    // 변경 알림
+    broadcastMaintChange();
     if (on) {
         // 전체 점검 켜면 안내 페이지로 이동
         window.location.href = '../maintenance.html';
@@ -417,11 +471,11 @@ function setGlobalMaintenance(on) {
 }
 
 document.getElementById('btn-maint-device').addEventListener('click', () => {
-    const cur = sessionStorage.getItem(DEV_FLAG) === '1' || !!window.__maintenanceMode;
+    const cur = isDeviceMaintOn();
     setDeviceMaintenance(!cur);
 });
 document.getElementById('btn-maint-global').addEventListener('click', () => {
-    const cur = sessionStorage.getItem(GBL_FLAG) === '1';
+    const cur = isGlobalMaintOn();
     setGlobalMaintenance(!cur);
 });
 

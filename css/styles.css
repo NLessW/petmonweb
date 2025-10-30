@@ -741,7 +741,9 @@ h3 {
 .status-yellow {
     color: #ffff00;
 }
-
+.status-red {
+    color: #ff4c4c;
+}
 /* 프로세스 단계 표시 */
 /* (Reverted stepper/subtext/actions styles) */
 

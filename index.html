@@ -253,5 +253,52 @@
                 } catch {}
             })();
         </script>
+        <script>
+            // 유지보수 상태 UI 적용
+            (function () {
+                const DEV_FLAG = 'petmon.deviceMaintenance';
+                const GBL_FLAG = 'petmon.globalMaintenance';
+
+                function setStatus(el, text, cls) {
+                    if (!el) return;
+                    el.textContent = text;
+                    el.classList.remove('status-green', 'status-yellow', 'status-red');
+                    if (cls) el.classList.add(cls);
+                }
+
+                function updateMainMaintUI() {
+                    try {
+                        const devOn = sessionStorage.getItem(DEV_FLAG) === '1';
+                        const gblOn = sessionStorage.getItem(GBL_FLAG) === '1';
+                        const on = devOn || gblOn || !!window.__maintenanceMode;
+
+                        const arduinoEl = document.getElementById('arduino-status');
+                        const machineEl = document.getElementById('machine-status');
+                        const startBtn = document.getElementById('login-button');
+
+                        if (on) {
+                            setStatus(arduinoEl, '준비중', 'status-red');
+                            setStatus(machineEl, '불가능', 'status-red');
+                            if (startBtn) startBtn.disabled = true;
+                        } else {
+                            setStatus(arduinoEl, '정상', 'status-green');
+                            setStatus(machineEl, '가능', 'status-green');
+                            if (startBtn) startBtn.disabled = false;
+                        }
+                    } catch {}
+                }
+
+                // 초기 적용
+                document.addEventListener('DOMContentLoaded', updateMainMaintUI);
+
+                // admin에서 보낸 이벤트/스토리지 변경 수신
+                window.addEventListener('petmon:maintenance-change', updateMainMaintUI);
+                window.addEventListener('storage', (e) => {
+                    if (e.key === '__petmon_maint_bcast' || e.key === DEV_FLAG || e.key === GBL_FLAG) {
+                        updateMainMaintUI();
+                    }
+                });
+            })();
+        </script>
     </body>
 </html>
