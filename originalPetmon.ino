@@ -15,6 +15,16 @@
 #define DEFAULT_SPEED_D1 70
 #define DEFAULT_SPEED_D2 90
 
+// 4~20mA 센서 설정
+const int analogPin = A0;     // 4~20mA 입력 핀
+const float R = 250.0;        // 변환용 저항 (옴)
+const float Vref = 5.0;       // 아날로그 기준 전압
+const int ADCmax = 1023;      // 10bit ADC
+
+// FA50 인버터 주파수 설정 (필요시 수정)
+const float MIN_FREQ = 0.0;   // 4mA일 때 주파수 (Hz)
+const float MAX_FREQ = 60.0;  // 20mA일 때 주파수 (Hz)
+
 // 현재 모터 속도 (EEPROM에서 로드)
 int speed_DO = DEFAULT_SPEED_DO;
 int speed_DC = DEFAULT_SPEED_DC;
@@ -112,13 +122,16 @@ void setup() {
     pinMode(labelSensor, INPUT);
     pinMode(labelMotor, OUTPUT);
 
+    // 4~20mA 센서 핀 설정
+    pinMode(analogPin, INPUT);
+
     digitalWrite(led_Red, HIGH);
     digitalWrite(led_Blue, HIGH);
 
     Serial1.println("=== System Initialized ===");
     Serial1.println("*** LOGIN REQUIRED ***");
-    Serial1.println("Enter '98' for ADMIN login (speed control enabled)");   // [ADD]
-    Serial1.println("Enter '99' for USER login (no real-time speed control)"); // [ADD]
+    Serial1.println("Enter '98' for ADMIN login (speed control enabled)");
+    Serial1.println("Enter '99' for USER login (no real-time speed control)");
     Serial1.println("Enter 'h' for help");
 }
 
@@ -330,7 +343,7 @@ void showHelp() {
     Serial1.println("3  - Run Sensor1 Motor (24V)");
     Serial1.println("4  - Run Sensor2 Motor (24V)");
     Serial1.println("5  - Run Full Auto Sequence");
-    Serial1.println("0  - Show Sensor Status");
+    Serial1.println("0  - Show Sensor Status (includes 4-20mA reading)");
     Serial1.println("X  - Stop Motor (Emergency)");
     Serial1.println("L  - Logout");
     Serial1.println("Admin-only: Q (query speeds), SPD:DO=n;DC=n;D1=n;D2=n (set speeds)");
@@ -389,6 +402,23 @@ if (labelCutterState) {
     lastSwitchState = switchState;  // 마지막에 현재 스위치 상태 저장
 }
 
+float read4to20mA() {
+    int adc = analogRead(analogPin);
+    float voltage = (adc * Vref) / ADCmax;
+    float current_mA = (voltage / R) * 1000.0;
+    return current_mA;
+}
+
+// 전류값을 주파수로 변환
+float currentToFrequency(float current_mA) {
+    // 범위 제한: 4~20mA
+    current_mA = constrain(current_mA, 4.0, 20.0);
+    
+    // 선형 변환: 4mA → MIN_FREQ, 20mA → MAX_FREQ
+    float frequency = MIN_FREQ + ((current_mA - 4.0) / (20.0 - 4.0)) * (MAX_FREQ - MIN_FREQ);
+    return frequency;
+}
+
 void showSensorStatus() {
     Serial1.println("=== Current Sensor Status ===");
     
@@ -412,6 +442,23 @@ void showSensorStatus() {
     
     Serial1.print("Hand Sensor (Pin 22): ");
     Serial1.println(hand == HIGH ? "HIGH (Hand Detected)" : "LOW (No Hand)");
+    
+    // 4~20mA 센서 및 FA50 주파수 표시
+    float current_mA = read4to20mA();
+    float frequency = currentToFrequency(current_mA);
+    int adc = analogRead(analogPin);
+    float voltage = (adc * Vref) / ADCmax;
+    
+    Serial1.print("FA50 Inverter (Pin A0): ");
+    Serial1.print("ADC=");
+    Serial1.print(adc);
+    Serial1.print(", V=");
+    Serial1.print(voltage, 3);
+    Serial1.print("V, I=");
+    Serial1.print(current_mA, 2);
+    Serial1.print("mA, Freq=");
+    Serial1.print(frequency, 2);
+    Serial1.println("Hz");
     
     Serial1.print("Login Status: ");
     Serial1.println(login ? "LOGGED IN" : "NOT LOGGED IN");
@@ -894,3 +941,4 @@ void repairMode(){
         }
     }
 }
+
