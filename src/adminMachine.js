@@ -95,8 +95,41 @@ async function readLoop() {
                         handleAutoLoginDetect(line);
                     }
                 }
-                // 끝에 개행이 아직 안 온 경우(line 조각)도 로그인 패턴 감시
-                handleAutoLoginDetect(serialBuffer);
+
+                // 버퍼에 개행 없는 메시지가 일정 시간 쌓이면 출력
+                if (serialBuffer.length > 0) {
+                    // 특정 완료 메시지는 개행 없이도 즉시 출력
+                    const patterns = [
+                        '24V Motor stopped',
+                        'Motor stopped',
+                        'Emergency stop',
+                        'Door opened',
+                        'Door closed',
+                    ];
+
+                    for (const pattern of patterns) {
+                        if (serialBuffer.includes(pattern)) {
+                            const msg = serialBuffer.trim();
+                            if (msg) {
+                                appendLog(msg, 'rx');
+                                handleAutoLoginDetect(msg);
+                            }
+                            serialBuffer = '';
+                            break;
+                        }
+                    }
+
+                    // 또는 버퍼가 너무 오래되면 타임아웃으로 출력
+                    clearTimeout(window._serialBufferTimeout);
+                    window._serialBufferTimeout = setTimeout(() => {
+                        if (serialBuffer.trim().length > 0) {
+                            const msg = serialBuffer.trim();
+                            appendLog(msg, 'rx');
+                            handleAutoLoginDetect(msg);
+                            serialBuffer = '';
+                        }
+                    }, 500); // 0.5초 후 강제 출력
+                }
             }
         } catch (e) {
             appendLog('Read error: ' + e.message, 'err');
