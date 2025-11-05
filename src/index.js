@@ -1880,18 +1880,41 @@ function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
     return withReadLock(
         () =>
             new Promise((resolve, reject) => {
-                const timer = setTimeout(() => {
-                    console.warn('waitForAnyArduinoResponse timeout', { targetMessages });
-                    reject(new Error('Timeout while waiting for Arduino response'));
-                }, timeoutMs);
+                let timer;
+                const scheduleTimeout = (ms) => {
+                    try {
+                        clearTimeout(timer);
+                    } catch {}
+                    timer = setTimeout(() => {
+                        console.warn('waitForAnyArduinoResponse timeout', { targetMessages });
+                        reject(new Error('Timeout while waiting for Arduino response'));
+                    }, ms);
+                };
+                scheduleTimeout(timeoutMs);
 
                 const stepCheckBuffer = () => {
-                    const normAll = normalizeText(__rxBuf);
+                    const rawAll = __rxBuf || '';
+                    const normAll = normalizeText(rawAll);
+
+                    // [NEW] 손 감지 시마다 타이머 30초로 리셋하고 해당 토큰 1회 소비
+                    if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
+                        scheduleTimeout(30000);
+                        // 토큰 1개만 소비하여 다음 감지를 새 이벤트로 처리
+                        let key = '';
+                        if (normAll.includes('hand detected')) key = 'hand detected';
+                        else if (normAll.includes('\n23')) key = '\n23';
+                        else key = '23';
+                        const idx = normAll.indexOf(key);
+                        if (idx !== -1) {
+                            __rxBuf = rawAll.slice(idx + key.length);
+                        }
+                    }
+
                     if (normAll.includes('error:')) {
                         try {
                             clearTimeout(timer);
                         } catch {}
-                        const line = __rxBuf.split(/\r?\n/).find((l) => /error:/i.test(l)) || '기기 오류';
+                        const line = rawAll.split(/\r?\n/).find((l) => /error:/i.test(l)) || '기기 오류';
                         showErrorScreen(line.replace(/.*error:\s*/i, '기기 오류: '));
                         reject(new Error('Arduino reported ERROR'));
                         return true;
@@ -1907,7 +1930,7 @@ function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
                         const idx = normAll.indexOf(normalizedTargets[i]);
                         if (idx !== -1) {
                             // consume up to end of matched
-                            __rxBuf = __rxBuf.slice(idx + targetMessages[i].length);
+                            __rxBuf = rawAll.slice(idx + targetMessages[i].length);
                             try {
                                 clearTimeout(timer);
                             } catch {}
@@ -2110,7 +2133,7 @@ function waitForCloseOrHand(targetMessage, { timeoutMs = 10000 } = {}) {
 //     );
 // }
 
-// 2→3→4 단계 실행: 닫힘 중 손 감지 시 다시 열었다가 재시도 후 이어서 진행
+// 2단계 닫힘 중 손 감지 시 다시 열었다가 재시도 후 이어서 진행
 async function runCloseClassifyCollectSequence() {
     // 2. 닫힘
     renderCloseDoorOriginal('문이 닫힙니다. 손 조심하세요! ⚠️');
