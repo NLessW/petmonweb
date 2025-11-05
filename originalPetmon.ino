@@ -33,6 +33,8 @@ int seesaw_State2 = 0;
 int door_open_state = 0;
 int door_close_state = 0;
 int hand_State = 0;
+int inverter_State = 0;
+int fwd_State = 0;
 
 // 24V DC MOTOR PIN
 int ena_Pin = 6; 
@@ -44,19 +46,29 @@ int enb_Pin = 11;
 int in4_Pin = 10;
 int in3_Pin = 9;
 
+// Inverter PIN
+int inverterPin = 50;
+int fwdPin = 40;
+
 // LED PIN
 int led_Red = 46;
 int led_Blue = 47;
+
+// === 띠 분리기 관련 추가 ===
+int labelSwitch = 24;  // 스위치 입력 핀
+int labelSensor = 25;  // 센서 입력 핀
+int labelMotor = 48;   // 모터 출력 핀
 
 bool motorRunning = false;
 bool switchPressed = false;
 bool motorStarted = false;
 int lastSensorState = HIGH;
+bool labelCutterState = false;
+bool labelOpenTriggered = false; // 문 열기 1회 트리거 가드
 bool errorState = false; // 오류 상태 플래그
 
 bool login = false;  // 로그인 상태 변수
 bool adminMode = false; // [ADD] 관리자 모드 여부
-
 
 void setup() {
     Serial1.begin(9600);
@@ -89,8 +101,16 @@ void setup() {
     pinMode(in3_Pin, OUTPUT);
     pinMode(in4_Pin, OUTPUT);
 
+    pinMode(inverterPin, OUTPUT);
+    pinMode(fwdPin, OUTPUT);
+
     pinMode(led_Red, OUTPUT);
     pinMode(led_Blue, OUTPUT);
+
+    // 띠 분리기 핀 설정
+    pinMode(labelSwitch, INPUT);
+    pinMode(labelSensor, INPUT);
+    pinMode(labelMotor, OUTPUT);
 
     digitalWrite(led_Red, HIGH);
     digitalWrite(led_Blue, HIGH);
@@ -127,20 +147,31 @@ void sendCurrentSpeeds() {
 }
 
 void loop() {
-    
+    if(login){
+        labelCutter();
+    }
+    if(labelCutterState==true && !labelOpenTriggered){
+        Serial1.println("Door will opened..");
+        executeOpenDoor();
+        labelOpenTriggered = true;
+    }
 
+    // 시리얼 명령 처리
     if (Serial1.available() > 0) {
-        String input = Serial1.readStringUntil('\n');
+        String input = Serial1.readString();
         input.trim();
 
         Serial1.print("Input received: ");
         Serial1.println(input);
 
-        // 로그인 명령 우선 처리
+        // [MOD] 로그인 분리: 98=ADMIN, 99=USER
         if (input == "98") {
             login = true;
             adminMode = true;
+            // 새 세션 시작 시 오류 상태 초기화 (업로드 없이도 정상 복구되게)
+            errorState = false;
             Serial1.println("*** ADMIN LOGIN SUCCESSFUL ***");
+            Serial1.println("Error state cleared.");
             Serial1.println("Real-time speed control ENABLED.");
             sendCurrentSpeeds();
             Serial1.println("Enter 'h' for available commands");
@@ -148,20 +179,16 @@ void loop() {
         } else if (input == "99") {
             login = true;
             adminMode = false;
+            // 새 세션 시작 시 오류 상태 초기화 (업로드 없이도 정상 복구되게)
+            errorState = false;
             Serial1.println("*** USER LOGIN SUCCESSFUL ***");
+            Serial1.println("Error state cleared.");
             Serial1.println("Real-time speed control DISABLED.");
             Serial1.println("Enter 'h' for available commands");
             return;
         }
 
-        // [핵심] 로그인 여부와 무관하게 X/L 즉시 처리
-        if (input.length() == 1) {
-            char c = input.charAt(0);
-            if (c == 'X' || c == 'x') { stopMotor(); return; }
-            if (c == 'L' || c == 'l') { logout();   return; }
-        }
-
-        // 관리자 전용 기능
+        // [MOD] 속도 설정은 관리자만
         if (input.startsWith("SPD:")) {
             if (!adminMode) {
                 Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
@@ -170,6 +197,8 @@ void loop() {
             parseAndSetSpeeds(input);
             return;
         }
+
+        // [MOD] 속도 조회도 관리자만
         if (input == "Q" || input == "q") {
             if (!adminMode) {
                 Serial1.println("*** ACCESS DENIED - Admin required (use 98) ***");
@@ -179,7 +208,7 @@ void loop() {
             return;
         }
 
-        // 로그인 전 허용 명령
+        // 로그인되지 않은 상태에서는 도움말과 센서 상태만 허용
         if (!login) {
             if (input == "h" || input == "H") {
                 showLoginHelp();
@@ -193,7 +222,7 @@ void loop() {
             return;
         }
 
-        // 로그인 후 일반 명령
+        // 로그인된 상태에서만 실행되는 명령들
         if (input.length() == 1) {
             char command = input.charAt(0);
             switch(command) {
@@ -203,8 +232,14 @@ void loop() {
                 case '4': executeSensor2Motor(); break;
                 case '5': runAutoSequence(); break;
                 case '0': showSensorStatus(); break;
+                case 'X':
+                case 'x': stopMotor(); break;
                 case 'h':
                 case 'H': showHelp(); break;
+                case 'r':
+                case 'R': repairMode(); break;
+                case 'L':
+                case 'l': logout(); break;
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
             }
         } else {
@@ -223,7 +258,9 @@ void triggerError(const char* msg) {
     // 비상 상황: 문이 열린 상태면 안전하게 닫기 시도
     emergencyCloseDoorIfOpen();
     // 오류 상황에서는 인버터까지 완전 차단
-    Serial1.println("All outputs OFF due to error.");
+    digitalWrite(inverterPin, LOW);
+    digitalWrite(fwdPin, LOW);
+    Serial1.println("All outputs OFF (inverter disabled) due to error.");
     errorState = true;
 }
 
@@ -274,7 +311,10 @@ void logout() {
     stopMotor();
     login = false;
     adminMode = false; // [ADD]
+    // 세션 종료 시 오류 상태 초기화
+    errorState = false;
     Serial1.println("*** LOGGED OUT ***");
+    Serial1.println("Error state cleared.");
     Serial1.println("All functions are now locked.");
     Serial1.println("Enter '98' (admin) or '99' (user) to login again");
     
@@ -306,6 +346,57 @@ void showHelp() {
     Serial1.println("=====================================");
 }
 
+// =========================
+// 띠 분리기 제어 
+// =========================
+void labelCutter() {
+    static int lastSwitchState = LOW;  // 이전 스위치 상태 저장
+    static int lastSensorState = HIGH; // 초기값을 HIGH로 잡아 즉시 정지 방지
+    static unsigned long motorStartTime = 0;
+    const unsigned long sensorIgnoreMs = 700; // 시작 후 짧은 시간 센서 무시
+    const unsigned long maxRunMs = 15000; // 15초 타임아웃
+
+    int switchState = digitalRead(labelSwitch);
+if (labelCutterState) {
+        return;
+    }
+    // 스위치 상승엣지 감지: 이전 LOW, 현재 HIGH일 때만 1회 실행
+    if (switchState == HIGH && lastSwitchState == LOW) {
+        motorRunning = true;
+        motorStarted = true;
+        digitalWrite(labelMotor, HIGH);
+        motorStartTime = millis();
+        Serial1.println("Label motor started (login required)");
+    }
+
+    int currentSensorState = digitalRead(labelSensor);
+
+    // 모터가 시작된 상태에서, 시작 후 지정 시간 경과 후에만 센서 하강엣지로 정지
+    if (motorRunning && motorStarted) {
+        unsigned long elapsed = millis() - motorStartTime;
+        // 일정 시간 경과 후 센서 변화 감지로 정지
+        if (elapsed > sensorIgnoreMs) {
+            if (lastSensorState == HIGH && currentSensorState == HIGH) {
+                motorRunning = false;
+                motorStarted = false;
+                digitalWrite(labelMotor, LOW);
+                Serial1.println("Label cutting done!");
+                labelCutterState = true;
+            }
+        }
+        // 최대 15초 넘기면 에러 처리
+        if (elapsed > maxRunMs) {
+            motorRunning = false;
+            motorStarted = false;
+            digitalWrite(labelMotor, LOW);
+            // 라벨 분리기는 시스템 에러에서 제외: 모터만 정지하고 알림만 출력
+            Serial1.println("Label cutter timeout (15s) - label motor stopped (no system error)");
+        }
+    }
+
+    lastSensorState = currentSensorState;
+    lastSwitchState = switchState;  // 마지막에 현재 스위치 상태 저장
+}
 
 void showSensorStatus() {
     Serial1.println("=== Current Sensor Status ===");
@@ -385,6 +476,10 @@ void runAutoSequence() {
 }
 
 void executeOpenDoor() {
+    digitalWrite(inverterPin, HIGH);
+    digitalWrite(fwdPin, HIGH);
+    Serial1.println("Knife activated!");
+    
     door_open_state = digitalRead(openDoor_Sensor);
     Serial1.print("Current door open sensor state: ");
     Serial1.println(door_open_state);
@@ -394,7 +489,7 @@ void executeOpenDoor() {
         unsigned long startMs = millis();
         while(door_open_state == LOW) {
             // 시리얼 명령 처리 (속도 변경)
-            checkSerial1ForSpeedUpdate();
+            checkSerialForSpeedUpdate();
             
             digitalWrite(in3_Pin, LOW);
             digitalWrite(in4_Pin, HIGH);
@@ -431,7 +526,7 @@ void executeCloseDoor() {
         unsigned long startMs = millis();
         while(door_close_state == LOW) {
             // 시리얼 명령 처리 (속도 변경)
-            checkSerial1ForSpeedUpdate();
+            checkSerialForSpeedUpdate();
             
             if(digitalRead(handSensor) == HIGH) {
                 Serial1.println("*** HAND DETECTED! Stopping door and reopening ***");
@@ -475,6 +570,10 @@ void executeCloseDoor() {
     digitalWrite(in4_Pin, LOW);
     analogWrite(enb_Pin, 0);
     Serial1.println("Door stopped.");
+    // 프론트엔드에서 "Door closed" 문자열을 확실히 수신하도록 보장
+    if (digitalRead(closeDoor_Sensor) == HIGH) {
+        Serial1.println("Door closed");
+    }
 }
 
 void executeSensor1Motor() {
@@ -493,11 +592,10 @@ void executeSensor1Motor() {
     
     if (seesaw_State2 == HIGH) {
         Serial1.println("Sensor2 is HIGH. Starting 24V motor (direction 1)...");
-
         unsigned long startMs = millis();
         while (seesaw_State2 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
-            checkSerial1ForSpeedUpdate();
+            checkSerialForSpeedUpdate();
             
             digitalWrite(in1_Pin, LOW);
             digitalWrite(in2_Pin, HIGH);
@@ -514,6 +612,7 @@ void executeSensor1Motor() {
         
         if (!errorState) {
             Serial1.println("Sensor2 became LOW. Motor task completed!");
+            Serial1.println("24V Motor stopped.");
         }
     } else {
         Serial1.println("Sensor2 is already LOW. No action needed.");
@@ -522,7 +621,6 @@ void executeSensor1Motor() {
     digitalWrite(in1_Pin, LOW);
     digitalWrite(in2_Pin, LOW);
     analogWrite(ena_Pin, 0);
-    Serial1.println("24V Motor stopped.");
 }
 
 void executeSensor2Motor() {
@@ -538,7 +636,7 @@ void executeSensor2Motor() {
         unsigned long startMs = millis();
         while (seesaw_State1 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
-            checkSerial1ForSpeedUpdate();
+            checkSerialForSpeedUpdate();
             
             digitalWrite(in1_Pin, HIGH);
             digitalWrite(in2_Pin, LOW);
@@ -561,12 +659,16 @@ void executeSensor2Motor() {
     digitalWrite(in1_Pin, LOW);
     digitalWrite(in2_Pin, LOW);
     analogWrite(ena_Pin, 0);
-    Serial1.println("24V Motor stopped.");
     delay(5000);
+    labelCutterState = false;
+    labelOpenTriggered = false;
+    if (!errorState) {
+        Serial1.println("24V Motor stopped.");
+    }
 }
 
 // 새로운 함수: while 루프 안에서 속도 업데이트 확인
-void checkSerial1ForSpeedUpdate() {
+void checkSerialForSpeedUpdate() {
     while (Serial1.available() > 0) {
         int c = Serial1.peek();
         if (c == '\n' || c == '\r') { Serial1.read(); continue; }
@@ -667,6 +769,9 @@ void parseAndSetSpeeds(String cmd) {
     }
 }
 void stopMotor(){
+    // 모션 정지: 정상(X) 정지 시에는 인버터는 유지하고 FWD만 해제
+    digitalWrite(fwdPin, LOW);
+    //digitalWrite(inverterPin, LOW);
     // 12V 모터 정지
     digitalWrite(in3_Pin, LOW);
     digitalWrite(in4_Pin, LOW);
@@ -677,7 +782,131 @@ void stopMotor(){
     analogWrite(ena_Pin, 0);
     Serial1.println("Motor stopped.");
     login = false;  // 로그인 상태를 false로 변경
+        // Allow next label cycle
+    labelCutterState = false;
+    labelOpenTriggered = false;
     Serial1.println("Knife deactivated.");
+    // 비상정지 후에는 에러 상태를 해제하여 다음 세션에서 오작동을 막음
+    errorState = false;
+    Serial1.println("Error state cleared.");
     Serial1.println("*** LOGGED OUT BY EMERGENCY STOP ***");
     Serial1.println("Enter '99' to login again");
+}
+
+void repairMode(){
+    // seesaw sensor 1,2 모두 HIGH 상태일 때, 복구 모드
+    seesaw_State1 = digitalRead(seesaw_Sensor1);
+    seesaw_State2 = digitalRead(seesaw_Sensor2);
+    inverter_State = digitalRead(inverterPin);
+    
+    if(seesaw_State1 == HIGH && seesaw_State2 == HIGH){
+        // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
+        if(inverter_State == HIGH) {
+            digitalWrite(fwdPin, HIGH);
+            Serial1.println("Repair mode activated: Inverter and FWD ON to clear jam.");
+        } else if(inverter_State == LOW){
+            digitalWrite(inverterPin, HIGH);
+            digitalWrite(fwdPin, HIGH);
+            Serial1.println("Repair mode activated: Inverter ON and FWD ON to clear jam.");
+        }
+        
+        // 시소 복구 시퀀스 시작
+        unsigned long totalStartMs = millis();
+        bool repairSuccess = false;
+        int attemptCount = 0;
+        const int maxAttempts = 10; // 최대 10회 시도
+        
+        while(!repairSuccess && attemptCount < maxAttempts && (millis() - totalStartMs < 60000)){
+            attemptCount++;
+            Serial1.print("Repair attempt #");
+            Serial1.println(attemptCount);
+            
+            // 1단계: 시소를 내려서 sensor2가 LOW가 될 때까지 대기
+            Serial1.println("Step 1: Lowering seesaw until sensor2 is LOW");
+            unsigned long startMs = millis();
+            seesaw_State2 = digitalRead(seesaw_Sensor2);
+            
+            while(seesaw_State2 == HIGH && (millis() - startMs < 5000)){
+                seesaw_State2 = digitalRead(seesaw_Sensor2);
+                digitalWrite(in1_Pin, LOW);
+                digitalWrite(in2_Pin, HIGH);
+                analogWrite(ena_Pin, speed_D1);
+                delay(50);
+            }
+            
+            // Timeout 발생 시 다시 올리기
+            if(seesaw_State2 == HIGH){
+                Serial1.println("Timeout: sensor2 still HIGH, raising seesaw again");
+                startMs = millis();
+                
+                while((millis() - startMs < 5000)){
+                    digitalWrite(in1_Pin, HIGH);
+                    digitalWrite(in2_Pin, LOW);
+                    analogWrite(ena_Pin, speed_D1);
+                    delay(50);
+                }
+                
+                // 모터 잠깐 정지
+                digitalWrite(in1_Pin, LOW);
+                digitalWrite(in2_Pin, LOW);
+                delay(500);
+                
+                continue; // 다음 시도로
+            }
+            
+            // 2단계: sensor2가 LOW가 되면 시소를 올려서 sensor1이 LOW가 될 때까지
+            if(seesaw_State2 == LOW){
+                Serial1.println("Step 2: Sensor2 LOW detected, raising seesaw until sensor1 is LOW");
+                startMs = millis();
+                seesaw_State1 = digitalRead(seesaw_Sensor1);
+                
+                while(seesaw_State1 == HIGH && (millis() - startMs < 5000)){
+                    seesaw_State1 = digitalRead(seesaw_Sensor1);
+                    digitalWrite(in1_Pin, HIGH);
+                    digitalWrite(in2_Pin, LOW);
+                    analogWrite(ena_Pin, speed_D1);
+                    delay(50);
+                }
+                
+                if(seesaw_State1 == LOW){
+                    repairSuccess = true;
+                    Serial1.println("Seesaw repair sequence completed successfully.");
+                    break;
+                } else {
+                    Serial1.println("Timeout: sensor1 still HIGH, retrying");
+                    delay(500);
+                }
+            }
+        }
+        
+        // 모터 정지
+        digitalWrite(in1_Pin, LOW);
+        digitalWrite(in2_Pin, LOW);
+        analogWrite(ena_Pin, 0);
+        
+        // 복구 성공 시 인버터 3초 더 돌리기
+        if(repairSuccess){
+            Serial1.println("Running inverter for 3 more seconds to complete jam clearance...");
+            delay(3000);
+            
+            // FWD 및 Inverter 신호 종료
+            digitalWrite(fwdPin, LOW);
+            if(inverter_State == LOW){
+                digitalWrite(inverterPin, LOW);
+            }
+            
+            Serial1.println("Repair mode completed successfully. System restored to normal operation.");
+        } else {
+            // 복구 실패 시 에러 처리
+            Serial1.println("ERROR: Repair mode failed after maximum attempts or timeout.");
+            Serial1.print("Total attempts: ");
+            Serial1.println(attemptCount);
+            
+            // FWD 및 Inverter 신호 종료
+            digitalWrite(fwdPin, LOW);
+            if(inverter_State == LOW){
+                digitalWrite(inverterPin, LOW);
+            }
+        }
+    }
 }
