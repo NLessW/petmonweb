@@ -35,6 +35,8 @@ let port, reader, writer;
 let isConnected = false;
 // 수신 버퍼 설정
 let __rxBuf = '';
+// Suppress "already" sensor errors for a short window after HAND DETECTED
+let __handDetectSuppressUntil = 0;
 
 let isStopped = false;
 let autoReturnTimeout;
@@ -1768,26 +1770,23 @@ function normalizeText(s) {
     }
 }
 
-// consume helper: find target in buffer and consume up to its end
-function __consumeUntil(targets) {
-    const raw = __rxBuf || '';
-    const norm = normalizeText(raw);
-    const nTargets = targets.map((t) => normalizeText(t));
-    let hit = -1;
-    for (let i = 0; i < nTargets.length; i++) {
-        const idx = norm.indexOf(nTargets[i]);
-        if (idx !== -1) {
-            // consume up to end of matched target (same length in ASCII)
-            const end = idx + nTargets[i].length;
-            __rxBuf = raw.slice(end);
-            return { matched: true, which: targets[i] };
+// Remove noisy lines that would falsely trigger "already + sensor" error
+function __filterOutAlreadyAndSensorStateLines(input) {
+    try {
+        const lines = String(input || '').split(/\r?\n/);
+        const kept = [];
+        for (const ln of lines) {
+            const n = normalizeText(ln);
+            // Drop lines like "Door is already open. No action needed."
+            if (n.includes('already')) continue;
+            // Drop "Current door open/close sensor state: X"
+            if (n.includes('sensor state')) continue;
+            kept.push(ln);
         }
+        return kept.join('\n');
+    } catch {
+        return input;
     }
-    // also detect errors/hand/already early
-    if (norm.includes('error:')) return { error: true };
-    if (norm.includes('hand detected')) return { hand: true };
-    if (norm.includes('already')) return { already: true };
-    return { matched: false };
 }
 
 function waitForArduinoResponse(targetMessage, { timeoutMs = 10000, silent = false } = {}) {
@@ -1896,10 +1895,12 @@ function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
                     const rawAll = __rxBuf || '';
                     const normAll = normalizeText(rawAll);
 
-                    // [NEW] 손 감지 시마다 타이머 30초로 리셋하고 해당 토큰 1회 소비
+                    // Hand detected: extend timeout, consume token, and start suppression window
                     if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
                         scheduleTimeout(30000);
-                        // 토큰 1개만 소비하여 다음 감지를 새 이벤트로 처리
+                        __handDetectSuppressUntil = Date.now() + 8000; // 8s suppression
+
+                        // Consume only the first occurrence
                         let key = '';
                         if (normAll.includes('hand detected')) key = 'hand detected';
                         else if (normAll.includes('\n23')) key = '\n23';
@@ -1908,6 +1909,9 @@ function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
                         if (idx !== -1) {
                             __rxBuf = rawAll.slice(idx + key.length);
                         }
+
+                        // Also proactively strip noisy "already/sensor state" lines during suppression
+                        __rxBuf = __filterOutAlreadyAndSensorStateLines(__rxBuf);
                     }
 
                     if (normAll.includes('error:')) {
@@ -1919,13 +1923,23 @@ function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
                         reject(new Error('Arduino reported ERROR'));
                         return true;
                     }
+
+                    // Only treat "already + sensor" as error if not in the hand-detected suppression window
+                    const suppressAlready = Date.now() < __handDetectSuppressUntil;
                     if (normAll.includes('already') && normAll.includes('sensor')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        reject(new Error('Sensor state error (already)'));
-                        return true;
+                        if (suppressAlready) {
+                            // Strip those lines and continue
+                            __rxBuf = __filterOutAlreadyAndSensorStateLines(rawAll);
+                            return false;
+                        } else {
+                            try {
+                                clearTimeout(timer);
+                            } catch {}
+                            reject(new Error('Sensor state error (already)'));
+                            return true;
+                        }
                     }
+
                     for (let i = 0; i < normalizedTargets.length; i++) {
                         const idx = normAll.indexOf(normalizedTargets[i]);
                         if (idx !== -1) {
@@ -1983,7 +1997,29 @@ function waitForCloseOrHand(targetMessage, { timeoutMs = 10000 } = {}) {
                 }, timeoutMs);
 
                 const stepCheckBuffer = () => {
-                    const normAll = normalizeText(__rxBuf);
+                    const rawAll = __rxBuf || '';
+                    const normAll = normalizeText(rawAll);
+
+                    // 1) Prefer HAND DETECTED first, then suppress "already" errors for a short period
+                    if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
+                        // consume up to 'hand detected' if present
+                        const key = normAll.includes('hand detected') ? 'hand detected' : '23';
+                        const idx = normAll.indexOf(key);
+                        if (idx !== -1) __rxBuf = rawAll.slice(idx + key.length);
+
+                        __handDetectSuppressUntil = Date.now() + 8000; // 8s suppression
+                        // Strip noisy lines that could falsely trigger error
+                        __rxBuf = __filterOutAlreadyAndSensorStateLines(__rxBuf);
+
+                        try {
+                            clearTimeout(timer);
+                        } catch {}
+                        renderProcess('hand', '손이 감지되었습니다. 문이 열립니다.', 1);
+                        resolve({ status: 'hand' });
+                        return true;
+                    }
+
+                    // 2) Real errors
                     if (normAll.includes('error:')) {
                         try {
                             clearTimeout(timer);
@@ -1996,25 +2032,23 @@ function waitForCloseOrHand(targetMessage, { timeoutMs = 10000 } = {}) {
                         reject(new Error(msg || 'Arduino reported ERROR'));
                         return true;
                     }
+
+                    // 3) "already + sensor" only if not suppressed by a recent HAND DETECTED
+                    const suppressAlready = Date.now() < __handDetectSuppressUntil;
                     if (normAll.includes('already') && normAll.includes('sensor')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        reject(new Error('Sensor state error (already)'));
-                        return true;
+                        if (suppressAlready) {
+                            __rxBuf = __filterOutAlreadyAndSensorStateLines(rawAll);
+                            return false;
+                        } else {
+                            try {
+                                clearTimeout(timer);
+                            } catch {}
+                            reject(new Error('Sensor state error (already)'));
+                            return true;
+                        }
                     }
-                    if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
-                        // consume up to 'hand detected' if present
-                        const key = normAll.includes('hand detected') ? 'hand detected' : '23';
-                        const idx = normAll.indexOf(key);
-                        if (idx !== -1) __rxBuf = __rxBuf.slice(idx + key.length);
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        renderProcess('hand', '손이 감지되었습니다. 문이 열립니다.', 1);
-                        resolve({ status: 'hand' });
-                        return true;
-                    }
+
+                    // 4) Target OK
                     const nTarget = normalizeText(targetMessage);
                     const idx2 = normAll.indexOf(nTarget);
                     if (idx2 !== -1) {
