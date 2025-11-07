@@ -1398,7 +1398,7 @@ function showProcessButtons() {
         const ps = document.getElementById('process-screen');
         if (!ps) return;
         ps.querySelectorAll('button').forEach((btn) => {
-            btn.style.display = 'inline-block';
+            btn.style.display = 'none';
             btn.disabled = false;
         });
     } catch {
@@ -1595,7 +1595,7 @@ async function startProcess() {
     showProcessButtons();
     showScreen('process-screen');
     isStopped = false;
-    stopButton.disabled = true;
+    //stopButton.disabled = true;
 
     if (closeDoorButton.parentNode) closeDoorButton.parentNode.removeChild(closeDoorButton);
     closeDoorButton.disabled = false;
@@ -1707,6 +1707,7 @@ async function startProcess() {
                     await waitForArduinoResponse('Sensor2 became LOW.');
                 } else if (commands[i].cmd === '4') {
                     await waitForArduinoResponse('Sensor1 became LOW.');
+                    await new Promise((r) => setTimeout(r, 3000));
                 } else {
                     // [CHG]
                     await waitForDoorClosed({ timeoutMs: 20000 });
@@ -2189,11 +2190,13 @@ async function runCloseClassifyCollectSequence() {
     renderProcess('scan', '자원을 판별하는 중입니다...', 2);
     await writeCmd('3');
     await waitForArduinoResponse('Motor task completed!');
+    await new Promise((r) => setTimeout(r, 3000));
 
     // 4. 수집중
     renderProcess('collect', '자원을 수집하는 중입니다...', 3, { spin: true });
     await writeCmd('4');
     await waitForArduinoResponse('24V Motor stopped.');
+    await new Promise((r) => setTimeout(r, 3000));
 }
 
 // ========== Fa-duino 연결 ==========
@@ -2353,7 +2356,7 @@ loginSubmit.addEventListener('click', async () => {
                         await writeCmd('99'); // 로그인
                         await new Promise((r) => setTimeout(r, 800));
                         isStopped = false;
-                        stopButton.disabled = false;
+                        //stopButton.disabled = false;
                         await startProcess();
                     } catch (e) {
                         console.error('로그인/시작 처리 오류:', e);
@@ -2452,55 +2455,55 @@ phoneNumberInput.addEventListener('input', (e) => {
     e.target.value = f;
 });
 
-stopButton.addEventListener('click', async () => {
-    isStopped = true;
-    stopButton.disabled = true;
-    try {
-        clearInterval(__closeBtnUnlockTimer);
-        __closeBtnUnlockTimer = null;
-    } catch {}
+// stopButton.addEventListener('click', async () => {
+//     isStopped = true;
+//     stopButton.disabled = true;
+//     try {
+//         clearInterval(__closeBtnUnlockTimer);
+//         __closeBtnUnlockTimer = null;
+//     } catch {}
 
-    // 1번만 끝난 상태에서 중지 시 닫힘 버튼 클릭 로직 자동 실행
-    if (!closeDoorButton.disabled && closeDoorButton.parentNode) {
-        try {
-            closeDoorButton.disabled = true;
-            closeDoorButton.style = CLOSE_BTN_DISABLED_STYLE;
-            if (closeDoorButton.parentNode) closeDoorButton.parentNode.removeChild(closeDoorButton);
+//     // 1번만 끝난 상태에서 중지 시 닫힘 버튼 클릭 로직 자동 실행
+//     if (!closeDoorButton.disabled && closeDoorButton.parentNode) {
+//         try {
+//             closeDoorButton.disabled = true;
+//             closeDoorButton.style = CLOSE_BTN_DISABLED_STYLE;
+//             if (closeDoorButton.parentNode) closeDoorButton.parentNode.removeChild(closeDoorButton);
 
-            const commands = [
-                { cmd: '2', msg: '문이 닫힙니다. 손 조심하세요! ⚠️' },
-                { cmd: '3', msg: '자원을 판별하는 중입니다...' },
-                { cmd: '4', msg: '자원을 수집하는 중입니다...' },
-            ];
-            for (let i = 0; i < commands.length; i++) {
-                if (i === 0) {
-                    renderCloseDoorOriginal(commands[i].msg);
-                } else if (i === 1) {
-                    renderProcess('scan', commands[i].msg, 2);
-                } else {
-                    renderProcess('collect', commands[i].msg, 3, { spin: true });
-                }
+//             const commands = [
+//                 { cmd: '2', msg: '문이 닫힙니다. 손 조심하세요! ⚠️' },
+//                 { cmd: '3', msg: '자원을 판별하는 중입니다...' },
+//                 { cmd: '4', msg: '자원을 수집하는 중입니다...' },
+//             ];
+//             for (let i = 0; i < commands.length; i++) {
+//                 if (i === 0) {
+//                     renderCloseDoorOriginal(commands[i].msg);
+//                 } else if (i === 1) {
+//                     renderProcess('scan', commands[i].msg, 2);
+//                 } else {
+//                     renderProcess('collect', commands[i].msg, 3, { spin: true });
+//                 }
 
-                await writeCmd(commands[i].cmd);
-                await new Promise((r) => setTimeout(r, 50));
+//                 await writeCmd(commands[i].cmd);
+//                 await new Promise((r) => setTimeout(r, 50));
 
-                if (commands[i].cmd === '3') {
-                    await waitForArduinoResponse('Sensor2 became LOW.');
-                } else if (commands[i].cmd === '4') {
-                    await waitForArduinoResponse('Sensor1 became LOW.');
-                } else {
-                    // [CHG] 닫힘 완료 신호 보강 + 여유 타임아웃
-                    await waitForDoorClosed({ timeoutMs: 20000 });
-                }
-            }
-            showScreen('main-screen');
-        } catch (err) {
-            if (handleDeviceLost(err)) return;
-            console.error('중지 처리 중 오류:', err);
-            showErrorScreen('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
-        }
-    }
-});
+//                 if (commands[i].cmd === '3') {
+//                     await waitForArduinoResponse('Sensor2 became LOW.');
+//                 } else if (commands[i].cmd === '4') {
+//                     await waitForArduinoResponse('Sensor1 became LOW.');
+//                 } else {
+//                     // [CHG] 닫힘 완료 신호 보강 + 여유 타임아웃
+//                     await waitForDoorClosed({ timeoutMs: 20000 });
+//                 }
+//             }
+//             showScreen('main-screen');
+//         } catch (err) {
+//             if (handleDeviceLost(err)) return;
+//             console.error('중지 처리 중 오류:', err);
+//             showErrorScreen('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
+//         }
+//     }
+// });
 
 returnHomeButton.addEventListener('click', () => {
     // console.log('Return Home button clicked'); // 디버깅 로그 추가

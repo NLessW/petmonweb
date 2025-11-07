@@ -13,8 +13,9 @@ body {
     -webkit-tap-highlight-color: transparent;
     overflow: hidden;
     position: relative;
+    touch-action: none;
 }
-/* Ambient moving gradient for kiosk feel */
+
 body::before {
     content: '';
     position: fixed;
@@ -393,8 +394,10 @@ input[type='password']::placeholder {
 #login-submit:active {
     background-color: #2656c7;
 }
+/* stop button color is clear */
 #stop-button {
-    background-color: #ff4d4f !important;
+    background-color: transparent !important;
+    display: none;
 }
 #return-home {
     background-color: #353945;
@@ -551,6 +554,7 @@ h3 {
     line-height: 1.3;
 }
 #stop-button {
+    display: none;
     background: linear-gradient(180deg, #ff6b6e, #dc2626);
     border: 1px solid rgba(255, 255, 255, 0.12);
     font-size: 28px;

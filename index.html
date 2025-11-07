@@ -4,8 +4,18 @@
         <meta charset="utf-8" />
         <title>PETMON Machine</title>
         <link rel="stylesheet" href="./css/styles.css" />
+        <script type="text/javascript">
+            //우클릭 방지
+            document.oncontextmenu = function () {
+                return false;
+            };
+        </script>
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0"
+        />
     </head>
-    <body>
+    <body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
         <!-- 메인 화면과 상태 표시 -->
         <div class="main-layout">
             <!-- 메인 화면 -->
@@ -241,6 +251,7 @@
         <script src="./src/adminTriggers.js"></script>
         <script src="./src/secretExit.js"></script>
         <script src="./src/hotkeys.js"></script>
+        <script src="./src/navGuard.js"></script>
         <script>
             // 부트 체크: 전체 점검 플래그가 켜져 있으면 maintenance.html 로 이동
             (function () {

@@ -33,9 +33,6 @@ let __closeBtnCountdown = 0;
 
 let port, reader, writer;
 let isConnected = false;
-// 수신 버퍼 설정
-let __rxBuf = '';
-
 let isStopped = false;
 let autoReturnTimeout;
 let countdownInterval;
@@ -43,25 +40,14 @@ let errorAutoTimer;
 let errorCountdownTimer;
 // 테스트 모드 상태
 let __testMode = false;
-// 에러 스크린 1회 플래그
+// [ADD] Show error screen only once per session
 let __errorShownOnce = false;
 
-// 세션용 유틸/상수
+// [ADD] 세션용 유틸/상수
 const MEMBER_API_URL = 'https://petcycle.mycafe24.com/member_api.php';
 const POINT_API_URL = 'https://petcycle.mycafe24.com/point_api.php';
 
-function updateTestBadge() {
-    const b = document.getElementById('test-mode-badge');
-    if (!b) return;
-    if (__testMode) {
-        b.textContent = '테스트모드: ON';
-        b.style.color = '#86efac';
-    } else {
-        b.textContent = '테스트모드: OFF';
-        b.style.color = '#fca5a5';
-    }
-}
-// UUID v4 생성 (member/point API용 unique key). group_cd를 prefix로 붙임
+// [ADD] UUID v4 생성 (member/point API용 unique key). group_cd를 prefix로 붙임
 function secureUuid(prefix = '') {
     try {
         if (window.crypto && typeof crypto.randomUUID === 'function') {
@@ -271,8 +257,6 @@ async function teardownSerial() {
         reader = undefined;
         writer = undefined;
         isConnected = false;
-        // clear buffer on teardown
-        __rxBuf = '';
     }
 }
 
@@ -307,52 +291,6 @@ function writeCmd(cmd) {
 let currentPhoneNumber = '';
 let deviceConfig = { deviceCode: undefined, branchName: undefined };
 
-// USB 장치 필터링 및 기억
-const PREFERRED_USB_DEVICES = [
-    { vid: 0x067b, pid: 0x2303, label: 'Prolific PL2303 (USB-Serial Controller)' }, // main target
-    { vid: 0x1a86, pid: 0x7523, label: 'CH340/CH341' },
-    { vid: 0x0403, pid: 0x6001, label: 'FTDI FT232R' },
-    { vid: 0x10c4, pid: 0xea60, label: 'Silicon Labs CP210x' },
-];
-
-function getPreferredFilters() {
-    try {
-        const sv = Number(localStorage.getItem('petmon.usb.vid'));
-        const sp = Number(localStorage.getItem('petmon.usb.pid'));
-        const filters = [];
-        if (sv && sp) filters.push({ usbVendorId: sv, usbProductId: sp });
-        else PREFERRED_USB_DEVICES.forEach((d) => filters.push({ usbVendorId: d.vid, usbProductId: d.pid }));
-        return filters;
-    } catch {
-        return [];
-    }
-}
-
-function matchesPreferred(port) {
-    try {
-        const info = port.getInfo?.() || {};
-        const v = info.usbVendorId;
-        const p = info.usbProductId;
-        if (!v || !p) return false;
-        const sv = Number(localStorage.getItem('petmon.usb.vid'));
-        const sp = Number(localStorage.getItem('petmon.usb.pid'));
-        if (sv && sp) return v === sv && p === sp;
-        return PREFERRED_USB_DEVICES.some((d) => d.vid === v && d.pid === p);
-    } catch {
-        return false;
-    }
-}
-
-function rememberPreferred(port) {
-    try {
-        const info = port.getInfo?.() || {};
-        if (info.usbVendorId && info.usbProductId) {
-            localStorage.setItem('petmon.usb.vid', String(info.usbVendorId));
-            localStorage.setItem('petmon.usb.pid', String(info.usbProductId));
-        }
-    } catch {}
-}
-
 // ====== 로컬 ini 파일(C:\\petmon.ini)에서 지점명/기기코드 읽기 ======
 // 대신, index.html과 동일한 오리진에서 petmon.ini를 정적 제공하거나(권장, 루트에 배치)
 //  1) /petmon.ini (서비스 루트)
@@ -377,7 +315,7 @@ async function loadDeviceConfig() {
             if (deviceConfig.branchName && branchNameSpan) branchNameSpan.textContent = deviceConfig.branchName;
             if (pBranch) localStorage.setItem('petmon.branch', deviceConfig.branchName || '');
             if (pDevice) localStorage.setItem('petmon.device', deviceConfig.deviceCode || '');
-            // group_cd 저장
+            // [ADD] group_cd 저장
             if (pGroupCd) localStorage.setItem('petmon.group_cd', deviceConfig.groupCode || '');
             return;
         }
@@ -678,78 +616,6 @@ function __errorToText(err) {
     }
 }
 
-async function chooseSerialPort() {
-    try {
-        if (!('serial' in navigator)) {
-            alert('이 브라우저는 Web Serial API를 지원하지 않습니다. Chrome/Edge 최신 버전을 사용해주세요.');
-            return;
-        }
-        // 1) 포트 선택 대화상자 열기
-        const selected = await navigator.serial.requestPort();
-
-        // 2) 이전 포트 정리
-        if (port && port !== selected) {
-            try {
-                if (reader) {
-                    await reader.cancel();
-                    reader.releaseLock();
-                }
-            } catch {}
-            try {
-                if (writer) writer.releaseLock();
-            } catch {}
-            try {
-                await port.close();
-            } catch {}
-        }
-
-        // 3) 새 포트로 연결/스트림 구성
-        port = selected;
-        if (!port.readable && !port.writable) {
-            await port.open({ baudRate: 9600 });
-        }
-        const decoder = new TextDecoderStream();
-        port.readable.pipeTo(decoder.writable);
-        reader = decoder.readable.getReader();
-
-        const encoder = new TextEncoderStream();
-        encoder.readable.pipeTo(port.writable);
-        writer = encoder.writable.getWriter();
-
-        isConnected = true;
-
-        // UI 상태 갱신 (하드락 시 유지보수 해제 금지)
-        const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex';
-        const hardLock = !!(typeof window !== 'undefined' && window.__hardLock);
-        if (window && !isErrorVisible && !hardLock) {
-            window.__maintenanceMode = false;
-            if (window.startPeriodicStatusCheck) window.startPeriodicStatusCheck();
-        }
-        const arduinoStatus = document.getElementById('arduino-status');
-        const machineStatus = document.getElementById('machine-status');
-        if (arduinoStatus) {
-            arduinoStatus.textContent = '정상';
-            arduinoStatus.style.color = '#00ff4c';
-        }
-        if (machineStatus) {
-            machineStatus.textContent = '가능';
-            machineStatus.style.color = '#00ff4c';
-        }
-        if (document.getElementById('main-screen')?.style.display === 'flex') {
-            updateLoginButtonByStatus(); // 링크: [`updateLoginButtonByStatus`](src/index.js)
-        }
-    } catch (err) {
-        console.error('포트 선택 실패:', err);
-        showConfirmModal({
-            title: '포트 선택 실패',
-            lines: [String(err?.message || err)],
-            yesText: '확인',
-            noText: '닫기',
-            onYes: () => {},
-            onNo: () => {},
-        });
-    }
-}
 async function appendErrorLog(line) {
     // 0) 사용자가 지정한 파일(지속 핸들)로 먼저 시도
     try {
@@ -847,7 +713,7 @@ async function callPointApi(mobileWithHyphens, count) {
     }
 }
 
-// 회원 확인 API 호출
+// [ADD] 회원 확인 API 호출
 async function callMemberApi(mobileWithHyphens) {
     const apiUrl = MEMBER_API_URL;
     const payload = {
@@ -882,7 +748,7 @@ async function finalizeAndReturnHome() {
     let result = null;
     try {
         if (currentPhoneNumber && depositCount > 0) {
-            // callPointApi는 unique key + group_cd 포함해 전송
+            // [CHG] callPointApi는 unique key + group_cd 포함해 전송
             result = await callPointApi(currentPhoneNumber, depositCount);
             if (result && result.status === 'error') {
                 const logLineErr = `[${nowTs()}] RESULT=ERROR device=${
@@ -914,22 +780,11 @@ async function finalizeAndReturnHome() {
 
 // ========== 화면 전환 ==========
 function showScreen(screenId) {
-    // 화면 전환 전 안내 화살표 숨기기
+    // [ADD] ensure arrow hidden on any screen switch
     hideBottomArrow();
 
     document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
     document.getElementById(screenId).style.display = 'flex';
-
-    // 프로세스 중엔 상태 점검 루틴 중단, 메인 복귀 시 재개
-    try {
-        if (window) {
-            if (screenId === 'process-screen') {
-                if (window.stopPeriodicStatusCheck) window.stopPeriodicStatusCheck();
-            } else if (screenId === 'main-screen') {
-                if (!window.__hardLock && window.startPeriodicStatusCheck) window.startPeriodicStatusCheck();
-            }
-        }
-    } catch {}
 
     // 상태 패널 위치 이동
     if (statusSection && statusHostMain && statusHostProcess) {
@@ -944,38 +799,6 @@ function showScreen(screenId) {
     if (screenId === 'main-screen' && loginButton) {
         loginPopup.style.display = 'none';
         updateLoginButtonByStatus();
-
-        // X 신호 전송 후 새로고침
-        (async () => {
-            if (writer) {
-                try {
-                    await writeCmd('X');
-                    console.log('메인 화면 복귀: X 신호 전송 완료');
-                } catch (e) {
-                    console.error('메인 화면 복귀 시 X 전송 실패:', e);
-                }
-            }
-
-            // 테스트 모드 시 잔여 큐 비우기
-            if (__testMode) {
-                __simQueue = [];
-                __simPaused = false;
-            }
-
-            // 세션 초기화
-            phoneNumberInput.value = '';
-            currentPhoneNumber = '';
-            depositCount = 0;
-            const fill = document.getElementById('process-progress-fill');
-            if (fill) fill.style.width = '0%';
-
-            // X 전송 후 새로고침
-            // setTimeout(() => {
-            //     window.location.reload();
-            // }, 100);
-        })();
-
-        return; // 이후 코드 실행 방지
     }
 
     if (screenId === 'end-screen') {
@@ -1079,7 +902,7 @@ function showScreen(screenId) {
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
             try {
-                // 로그인(99) 전송 후 잠시 대기 -> 라벨 커터부터 재시작
+                // [변경] 로그인(99) 전송 후 잠시 대기 -> 라벨 커터부터 재시작
                 await writeCmd('99');
                 await new Promise((r) => setTimeout(r, 800)); // 아두이노 로그인 처리 여유
                 isStopped = false;
@@ -1106,7 +929,7 @@ function showScreen(screenId) {
 
     // 메인화면으로 돌아갈 때 아두이노에 'X' 신호 전송 및 세션 초기화
     if (screenId === 'main-screen') {
-        // 타이머 리셋
+        // [ADD] clear any leftover error timers
         try {
             clearTimeout(errorAutoTimer);
         } catch {}
@@ -1118,7 +941,7 @@ function showScreen(screenId) {
             clearInterval(__closeBtnUnlockTimer);
             __closeBtnUnlockTimer = null;
         } catch {}
-        // 자동 종료 흐름 플래그/닫기 버튼 정리
+        // [추가] 자동 종료 흐름 플래그/닫기 버튼 정리
         __inactivityExitInProgress = false;
         if (closeDoorButton?.parentNode) {
             try {
@@ -1129,10 +952,6 @@ function showScreen(screenId) {
         if (writer) {
             try {
                 writeCmd('X');
-                // 화면 복귀 후 새로고침으로 초기화
-                // window.addEventListener('click', () => {
-                //     window.location.reload();
-                // });
             } catch (e) {
                 console.error('메인 화면 복귀 시 X 전송 실패:', e);
             }
@@ -1154,10 +973,7 @@ function showScreen(screenId) {
 
 // 오류 화면 표시 및 점검 모드 전환
 function showErrorScreen(message) {
-    // [LOCK] 첫 에러 이후 세션 하드락
-    if (typeof window !== 'undefined') window.__hardLock = true;
-
-    // prevent repeated error screen
+    // [ADD] prevent repeated error screen
     if (__errorShownOnce) return;
     __errorShownOnce = true;
 
@@ -1314,7 +1130,7 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
             fill.style.width = pct + '%';
         }
 
-        // 띠 분리기 단계에서만 화살표 표시
+        // [ADD] show bottom arrow only for the label step
         if (iconKey === 'label') {
             showBottomArrowAt(1047);
         } else {
@@ -1338,7 +1154,7 @@ const SVG_CLOSE = `
  </svg>`;
 
 function renderOpenDoorOriginal(messageHtml) {
-    // 띠 분리기 단계에서만 표시 후 화살표 숨기기
+    // [ADD] hide arrow when leaving label step
     hideBottomArrow();
 
     processMessage.innerHTML = `
@@ -1357,7 +1173,7 @@ function renderOpenDoorOriginal(messageHtml) {
 }
 
 function renderCloseDoorOriginal(messageText) {
-    // 띠 분리기 단계에서만 표시 후 화살표 숨기기
+    // [ADD] hide arrow when leaving label step
     hideBottomArrow();
 
     processMessage.innerHTML = `
@@ -1406,23 +1222,10 @@ function showProcessButtons() {
 
 // 3분 후 텍스트 변경 및 버튼 추가 로직
 let inactivityTimeout;
-// 중복 실행 방지 플래그
+// [추가] 중복 실행 방지 플래그
 let __inactivityExitInProgress = false;
 
-// 2단계 닫힘 완료 신호를 대기하는 함수
-async function waitForDoorClosed({ timeoutMs = 20000 } = {}) {
-    return waitForAnyArduinoResponse(
-        [
-            'Door closed successfully!', // 정상 케이스
-            'Emergency: Door closed.', // 비상 닫힘 성공
-            'Door is already closed', // 예외적으로 이미 닫힘
-            'Door stopped.', // 모터 정지 로그(닫힘 직후 공통)
-        ],
-        { timeoutMs }
-    );
-}
-
-// 세션 타임아웃 흐름: 비활성 3분 후 종료
+// [추가] end-screen의 귀가 방식과 동일한 “우아한 자동 종료” 흐름
 async function beginGracefulAutoExit() {
     if (__inactivityExitInProgress) return;
     __inactivityExitInProgress = true;
@@ -1449,7 +1252,7 @@ async function beginGracefulAutoExit() {
             }
         } catch {}
 
-        // renderProcess로 테마/프로그레스 갱신
+        // [변경] renderProcess로 테마/프로그레스 갱신
         renderProcess('closeDoor', '입력이 없어 종료합니다.<br>안전을 위해 문을 닫는 중입니다...', 1);
 
         // 카운트다운/버튼 UI 추가만 별도로 붙임
@@ -1470,10 +1273,6 @@ async function beginGracefulAutoExit() {
         // 문 닫기 신호(2) 1회 전송
         try {
             await writeCmd('2');
-            // 모든 설정된 닫힘 완료 메세지 허용 + 짧은 제한
-            try {
-                await waitForDoorClosed({ timeoutMs: 7000 });
-            } catch {}
         } catch (e) {
             if (!handleDeviceLost(e)) console.error('무입력 종료: 문 닫기(2) 전송 실패:', e);
         }
@@ -1547,15 +1346,19 @@ async function handleExitButton() {
                 }
 
                 await writeCmd(commands[i].cmd);
+                // [추가] 각 명령 전송 후 짧은 지연시간을 주어 Serial1 통신 안정화
                 await new Promise((r) => setTimeout(r, 50));
 
                 if (commands[i].cmd === '3') {
+                    // 3번 명령은 'Sensor2 became LOW.'를 기다림
                     await waitForArduinoResponse('Sensor2 became LOW.');
                 } else if (commands[i].cmd === '4') {
+                    // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
-                    // [CHG] 닫힘 완료 신호 보강 + 여유 타임아웃
-                    await waitForDoorClosed({ timeoutMs: 20000 });
+                    // 2번 명령(문 닫기) 처리
+                    await waitForArduinoResponse('Door closed successfully!');
                 }
             }
 
@@ -1572,12 +1375,6 @@ async function handleExitButton() {
 }
 
 async function startProcess() {
-    // [GUARD] 하드락이면 아무 것도 시작하지 않음
-    if (typeof window !== 'undefined' && window.__hardLock) {
-        updateLoginButtonByStatus?.();
-        return;
-    }
-
     clearTimeout(autoReturnTimeout);
     clearTimeout(inactivityTimeout);
 
@@ -1624,9 +1421,6 @@ async function startProcess() {
         if (msg.includes('Timeout while waiting for Arduino response')) {
             try {
                 appendErrorLog(`[${nowTs()}] LABEL_STAGE_TIMEOUT -> reload`);
-            } catch {}
-            try {
-                sessionStorage.setItem('petmon.stopOnReload', '1');
             } catch {}
             try {
                 await teardownSerial();
@@ -1699,16 +1493,25 @@ async function startProcess() {
                 }
 
                 await writeCmd(commands[i].cmd);
+                // [추가] 각 명령 전송 후 짧은 지연시간을 주어 Serial1 통신 안정화
                 await new Promise((r) => setTimeout(r, 50));
 
                 if (commands[i].cmd === '3') {
+                    // 3번 명령은 'Sensor2 became LOW.'를 기다림
                     await waitForArduinoResponse('Sensor2 became LOW.');
                 } else if (commands[i].cmd === '4') {
+                    // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
-                    // [CHG]
-                    await waitForDoorClosed({ timeoutMs: 20000 });
+                    // 2번 명령(문 닫기) 처리
+                    await waitForArduinoResponse('Door closed successfully!');
                 }
+            }
+            stopButton.disabled = true;
+            if (isStopped) {
+                showScreen('main-screen');
+                return;
             }
             depositCount += 1;
             showScreen('end-screen');
@@ -1768,372 +1571,206 @@ function normalizeText(s) {
     }
 }
 
-// consume helper: find target in buffer and consume up to its end
-function __consumeUntil(targets) {
-    const raw = __rxBuf || '';
-    const norm = normalizeText(raw);
-    const nTargets = targets.map((t) => normalizeText(t));
-    let hit = -1;
-    for (let i = 0; i < nTargets.length; i++) {
-        const idx = norm.indexOf(nTargets[i]);
-        if (idx !== -1) {
-            // consume up to end of matched target (same length in ASCII)
-            const end = idx + nTargets[i].length;
-            __rxBuf = raw.slice(end);
-            return { matched: true, which: targets[i] };
+// 공통: 수신 데이터에 'already' 포함 시 센서 오류 처리
+function detectAndHandleAlready(data) {
+    try {
+        const s = String(data || '').toLowerCase();
+        if (!s.includes('already')) return false;
+
+        // 자동 종료 흐름 중에는 무시
+        if (typeof __inactivityExitInProgress !== 'undefined' && __inactivityExitInProgress) return false;
+
+        // 문 상태 관련 메시지("door already open/closed")는 에러 아님
+        if (s.includes('door')) return false;
+
+        // 명확히 센서 관련일 때만 에러 처리
+        if (s.includes('sensor')) {
+            showErrorScreen('센서 상태 오류, 관리자에게 문의해주세요.');
+            return true;
         }
+        // 그 외의 애매한 'already'는 무시
+        return false;
+    } catch {
+        return false;
     }
-    // also detect errors/hand/already early
-    if (norm.includes('error:')) return { error: true };
-    if (norm.includes('hand detected')) return { hand: true };
-    if (norm.includes('already')) return { already: true };
-    return { matched: false };
 }
 
-function waitForArduinoResponse(targetMessage, { timeoutMs = 10000, silent = false } = {}) {
-    return withReadLock(
-        () =>
-            new Promise((resolve, reject) => {
-                let timer;
+// 완료 신호를 10초 내 받지 못하면 모터 오작동 에러로 중단
+function waitForArduinoResponse(targetMessage, { timeoutMs = 10000 } = {}) {
+    return new Promise((resolve, reject) => {
+        let receivedData = '';
+        const timer = setTimeout(() => {
+            abortProcessNow('기기 오류: 모터 오작동(10초 내 완료 신호 없음)');
+            reject(new Error('Motor malfunction timeout'));
+        }, timeoutMs);
 
-                const scheduleTimeout = (ms) => {
-                    try {
+        const loop = async () => {
+            try {
+                const { value, done } = await reader.read();
+                if (done) {
+                    clearTimeout(timer);
+                    reject(new Error('Reader stream closed unexpectedly.'));
+                    return;
+                }
+                if (value) {
+                    receivedData += value;
+
+                    if (receivedData.includes('ERROR:')) {
                         clearTimeout(timer);
-                    } catch {}
-                    timer = setTimeout(() => {
-                        const err = new Error('Motor malfunction timeout');
-                        if (!silent) {
-                            abortProcessNow(`기기 오류: 모터 오작동(${Math.round(ms / 1000)}초 내 완료 신호 없음)`);
-                        }
-                        reject(err);
-                    }, ms);
-                };
-                scheduleTimeout(timeoutMs);
-
-                const stepCheckBuffer = () => {
-                    const normAll = normalizeText(__rxBuf);
-                    if (normAll.includes('hand detected')) scheduleTimeout(30000);
-
-                    if (normAll.includes('error:')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        const msg = (__rxBuf.split(/\r?\n/).find((l) => /error:/i.test(l)) || '').replace(
-                            /.*error:\s*/i,
-                            ''
-                        );
-                        if (!silent) {
-                            abortProcessNow(`기기 오류: ${msg || '알 수 없는 오류'}`);
-                        }
-                        reject(new Error(msg || 'Arduino reported ERROR'));
-                        return true;
+                        const line = receivedData.split(/\r?\n/).find((l) => l.includes('ERROR:')) || '기기 오류';
+                        const msg = line.replace(/.*ERROR:\s*/, '');
+                        abortProcessNow(`기기 오류: ${msg}`);
+                        reject(new Error(msg));
+                        return;
                     }
-                    if (normalizeText(__rxBuf).includes(normalizeText(targetMessage))) {
-                        const idx = normalizeText(__rxBuf).indexOf(normalizeText(targetMessage));
-                        __rxBuf = __rxBuf.slice(idx + targetMessage.length);
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
+
+                    if (detectAndHandleAlready(receivedData)) {
+                        clearTimeout(timer);
+                        reject(new Error('Sensor state error (already)'));
+                        return;
+                    }
+
+                    if (receivedData.includes(targetMessage)) {
+                        clearTimeout(timer);
                         resolve();
-                        return true;
+                        return;
                     }
-                    return false;
-                };
-
-                const loop = async () => {
-                    try {
-                        if (stepCheckBuffer()) return;
-
-                        const { value, done } = await reader.read();
-                        if (done) {
-                            try {
-                                clearTimeout(timer);
-                            } catch {}
-                            reject(new Error('Reader stream closed unexpectedly.'));
-                            return;
-                        }
-                        if (value) {
-                            __rxBuf += value;
-                            if (normalizeText(__rxBuf).includes('hand detected')) scheduleTimeout(30000);
-                        }
-                        loop();
-                    } catch (error) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        console.error('Error in waitForArduinoResponse loop:', error);
-                        if (!silent) {
-                            if (!handleDeviceLost(error)) {
-                                abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
-                            }
-                        }
-                        reject(error);
-                    }
-                };
+                }
                 loop();
-            })
-    );
+            } catch (error) {
+                clearTimeout(timer);
+                console.error('Error in waitForArduinoResponse loop:', error);
+                if (!handleDeviceLost(error)) {
+                    abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
+                }
+                reject(error);
+            }
+        };
+        loop();
+    });
 }
 
+// 다중 패턴 대기: 에러/이미 상태 시 즉시 중단 + reject
 function waitForAnyArduinoResponse(targetMessages, { timeoutMs = 30000 } = {}) {
     const normalizedTargets = targetMessages.map((m) => normalizeText(m));
-    return withReadLock(
-        () =>
-            new Promise((resolve, reject) => {
-                let timer;
-                const scheduleTimeout = (ms) => {
-                    try {
+    return new Promise((resolve, reject) => {
+        let receivedData = '';
+        const timer = setTimeout(() => {
+            console.warn('waitForAnyArduinoResponse timeout', { targetMessages });
+            reject(new Error('Timeout while waiting for Arduino response'));
+        }, timeoutMs);
+
+        const loop = async () => {
+            try {
+                const { value, done } = await reader.read();
+                if (done) {
+                    clearTimeout(timer);
+                    reject('Reader stream closed unexpectedly.');
+                    return;
+                }
+                if (value) {
+                    receivedData += value;
+
+                    // 에러 신호 감지
+                    if (receivedData.includes('ERROR:')) {
                         clearTimeout(timer);
-                    } catch {}
-                    timer = setTimeout(() => {
-                        console.warn('waitForAnyArduinoResponse timeout', { targetMessages });
-                        reject(new Error('Timeout while waiting for Arduino response'));
-                    }, ms);
-                };
-                scheduleTimeout(timeoutMs);
-
-                const stepCheckBuffer = () => {
-                    const rawAll = __rxBuf || '';
-                    const normAll = normalizeText(rawAll);
-
-                    // [NEW] 손 감지 시마다 타이머 30초로 리셋하고 해당 토큰 1회 소비
-                    if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
-                        scheduleTimeout(30000);
-                        // 토큰 1개만 소비하여 다음 감지를 새 이벤트로 처리
-                        let key = '';
-                        if (normAll.includes('hand detected')) key = 'hand detected';
-                        else if (normAll.includes('\n23')) key = '\n23';
-                        else key = '23';
-                        const idx = normAll.indexOf(key);
-                        if (idx !== -1) {
-                            __rxBuf = rawAll.slice(idx + key.length);
-                        }
+                        const line = receivedData.split(/\r?\n/).find((l) => l.includes('ERROR:')) || '기기 오류';
+                        showErrorScreen(line.replace(/.*ERROR:\s*/, '기기 오류: '));
+                        return;
                     }
 
-                    if (normAll.includes('error:')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        const line = rawAll.split(/\r?\n/).find((l) => /error:/i.test(l)) || '기기 오류';
-                        showErrorScreen(line.replace(/.*error:\s*/i, '기기 오류: '));
-                        reject(new Error('Arduino reported ERROR'));
-                        return true;
+                    // 'already' 감지 시 센서 오류 처리
+                    if (detectAndHandleAlready(receivedData)) {
+                        clearTimeout(timer);
+                        return;
                     }
-                    if (normAll.includes('already') && normAll.includes('sensor')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        reject(new Error('Sensor state error (already)'));
-                        return true;
-                    }
-                    for (let i = 0; i < normalizedTargets.length; i++) {
-                        const idx = normAll.indexOf(normalizedTargets[i]);
-                        if (idx !== -1) {
-                            // consume up to end of matched
-                            __rxBuf = rawAll.slice(idx + targetMessages[i].length);
-                            try {
-                                clearTimeout(timer);
-                            } catch {}
-                            resolve(targetMessages[i]);
-                            return true;
-                        }
-                    }
-                    return false;
-                };
 
-                const loop = async () => {
-                    try {
-                        if (stepCheckBuffer()) return;
-
-                        const { value, done } = await reader.read();
-                        if (done) {
-                            try {
-                                clearTimeout(timer);
-                            } catch {}
-                            reject(new Error('Reader stream closed unexpectedly.'));
-                            return;
-                        }
-                        if (value) {
-                            __rxBuf += value;
-                        }
-                        loop();
-                    } catch (error) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        console.error('Error in waitForAnyArduinoResponse loop:', error);
-                        if (!handleDeviceLost(error)) {
-                            // no-op
-                        }
-                        reject(error);
+                    const normalized = normalizeText(receivedData);
+                    const hitIdx = normalizedTargets.findIndex((t) => normalized.includes(t));
+                    if (hitIdx !== -1) {
+                        clearTimeout(timer);
+                        const hit = targetMessages[hitIdx];
+                        resolve(hit);
+                        return;
                     }
-                };
+                }
                 loop();
-            })
-    );
+            } catch (error) {
+                clearTimeout(timer);
+                console.error('Error in waitForAnyArduinoResponse loop:', error);
+                if (!handleDeviceLost(error)) {
+                    // 장치 분리 외 예외
+                }
+                reject(error);
+            }
+        };
+        loop();
+    });
 }
 
+// 2단계(문 닫기) 중 손 감지/완료 대기: 10초 타임아웃 추가 + 에러 시 중단
 function waitForCloseOrHand(targetMessage, { timeoutMs = 10000 } = {}) {
-    return withReadLock(
-        () =>
-            new Promise((resolve, reject) => {
-                const timer = setTimeout(() => {
-                    abortProcessNow('기기 오류: 모터 오작동(10초 내 완료 신호 없음)');
-                    reject(new Error('Motor malfunction timeout'));
-                }, timeoutMs);
+    return new Promise((resolve, reject) => {
+        let receivedData = '';
+        const timer = setTimeout(() => {
+            abortProcessNow('기기 오류: 모터 오작동(10초 내 완료 신호 없음)');
+            reject(new Error('Motor malfunction timeout'));
+        }, timeoutMs);
 
-                const stepCheckBuffer = () => {
-                    const normAll = normalizeText(__rxBuf);
-                    if (normAll.includes('error:')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        const msg = (__rxBuf.split(/\r?\n/).find((l) => /error:/i.test(l)) || '').replace(
-                            /.*error:\s*/i,
-                            ''
-                        );
-                        abortProcessNow(`기기 오류: ${msg || '알 수 없는 오류'}`);
-                        reject(new Error(msg || 'Arduino reported ERROR'));
-                        return true;
+        const loop = async () => {
+            try {
+                const { value, done } = await reader.read();
+                if (done) {
+                    clearTimeout(timer);
+                    reject(new Error('Reader stream closed unexpectedly.'));
+                    return;
+                }
+                if (value) {
+                    receivedData += value;
+
+                    if (receivedData.includes('ERROR:')) {
+                        clearTimeout(timer);
+                        const line = receivedData.split(/\r?\n/).find((l) => l.includes('ERROR:')) || '기기 오류';
+                        const msg = line.replace(/.*ERROR:\s*/, '');
+                        abortProcessNow(`기기 오류: ${msg}`);
+                        reject(new Error(msg));
+                        return;
                     }
-                    if (normAll.includes('already') && normAll.includes('sensor')) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
+
+                    if (detectAndHandleAlready(receivedData)) {
+                        clearTimeout(timer);
                         reject(new Error('Sensor state error (already)'));
-                        return true;
+                        return;
                     }
-                    if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
-                        // consume up to 'hand detected' if present
-                        const key = normAll.includes('hand detected') ? 'hand detected' : '23';
-                        const idx = normAll.indexOf(key);
-                        if (idx !== -1) __rxBuf = __rxBuf.slice(idx + key.length);
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
+
+                    if (receivedData.includes('HAND DETECTED!') || receivedData.includes('23')) {
+                        clearTimeout(timer);
                         renderProcess('hand', '손이 감지되었습니다. 문이 열립니다.', 1);
                         resolve({ status: 'hand' });
-                        return true;
+                        return;
                     }
-                    const nTarget = normalizeText(targetMessage);
-                    const idx2 = normAll.indexOf(nTarget);
-                    if (idx2 !== -1) {
-                        __rxBuf = __rxBuf.slice(idx2 + targetMessage.length);
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
+
+                    if (receivedData.includes(targetMessage)) {
+                        clearTimeout(timer);
                         resolve({ status: 'ok' });
-                        return true;
+                        return;
                     }
-                    return false;
-                };
-
-                const loop = async () => {
-                    try {
-                        if (stepCheckBuffer()) return;
-
-                        const { value, done } = await reader.read();
-                        if (done) {
-                            try {
-                                clearTimeout(timer);
-                            } catch {}
-                            reject(new Error('Reader stream closed unexpectedly.'));
-                            return;
-                        }
-                        if (value) {
-                            __rxBuf += value;
-                        }
-                        loop();
-                    } catch (error) {
-                        try {
-                            clearTimeout(timer);
-                        } catch {}
-                        console.error('Error in waitForCloseOrHand loop:', error);
-                        if (!handleDeviceLost(error)) {
-                            abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
-                        }
-                        reject(error);
-                    }
-                };
+                }
                 loop();
-            })
-    );
+            } catch (error) {
+                clearTimeout(timer);
+                console.error('Error in waitForCloseOrHand loop:', error);
+                if (!handleDeviceLost(error)) {
+                    abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
+                }
+                reject(error);
+            }
+        };
+        loop();
+    });
 }
 
-// 2단계(문 닫기) 중 손 감지/완료 대기
-// function waitForCloseOrHand(targetMessage, { timeoutMs = 10000 } = {}) {
-//     return withReadLock(
-//         () =>
-//             new Promise((resolve, reject) => {
-//                 const timer = setTimeout(() => {
-//                     abortProcessNow('기기 오류: 모터 오작동(10초 내 완료 신호 없음)');
-//                     reject(new Error('Motor malfunction timeout'));
-//                 }, timeoutMs);
-
-//                 const stepCheckBuffer = () => {
-//                     const normAll = normalizeText(__rxBuf);
-//                     if (normAll.includes('error:')) {
-//                         try { clearTimeout(timer); } catch {}
-//                         const msg = (__rxBuf.split(/\r?\n/).find((l) => /error:/i.test(l)) || '').replace(/.*error:\s*/i, '');
-//                         abortProcessNow(`기기 오류: ${msg || '알 수 없는 오류'}`);
-//                         reject(new Error(msg || 'Arduino reported ERROR'));
-//                         return true;
-//                     }
-//                     if (normAll.includes('already') && normAll.includes('sensor')) {
-//                         try { clearTimeout(timer); } catch {}
-//                         reject(new Error('Sensor state error (already)'));
-//                         return true;
-//                     }
-//                     if (normAll.includes('hand detected') || normAll.includes('\n23') || normAll.endsWith('23')) {
-//                         // consume up to 'hand detected' if present
-//                         const key = normAll.includes('hand detected') ? 'hand detected' : '23';
-//                         const idx = normAll.indexOf(key);
-//                         if (idx !== -1) __rxBuf = __rxBuf.slice(idx + key.length);
-//                         try { clearTimeout(timer); } catch {}
-//                         renderProcess('hand', '손이 감지되었습니다. 문이 열립니다.', 1);
-//                         resolve({ status: 'hand' });
-//                         return true;
-//                     }
-//                     const nTarget = normalizeText(targetMessage);
-//                     const idx2 = normAll.indexOf(nTarget);
-//                     if (idx2 !== -1) {
-//                         __rxBuf = __rxBuf.slice(idx2 + targetMessage.length);
-//                         try { clearTimeout(timer); } catch {}
-//                         resolve({ status: 'ok' });
-//                         return true;
-//                     }
-//                     return false;
-//                 };
-
-//                 const loop = async () => {
-//                     try {
-//                         if (stepCheckBuffer()) return;
-
-//                         const { value, done } = await reader.read();
-//                         if (done) {
-//                             try { clearTimeout(timer); } catch {}
-//                             reject(new Error('Reader stream closed unexpectedly.'));
-//                             return;
-//                         }
-//                         if (value) {
-//                             __rxBuf += value;
-//                         }
-//                         loop();
-//                     } catch (error) {
-//                         try { clearTimeout(timer); } catch {}
-//                         console.error('Error in waitForCloseOrHand loop:', error);
-//                         if (!handleDeviceLost(error)) {
-//                             abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
-//                         }
-//                         reject(error);
-//                     }
-//                 };
-//                 loop();
-//             })
-//     );
-// }
-
-// 2단계 닫힘 중 손 감지 시 다시 열었다가 재시도 후 이어서 진행
+// 2→3→4 단계 실행: 닫힘 중 손 감지 시 다시 열었다가 재시도 후 이어서 진행
 async function runCloseClassifyCollectSequence() {
     // 2. 닫힘
     renderCloseDoorOriginal('문이 닫힙니다. 손 조심하세요! ⚠️');
@@ -2163,20 +1800,6 @@ async function runCloseClassifyCollectSequence() {
 }
 
 // ========== Fa-duino 연결 ==========
-// Simple read lock to prevent concurrent reader.read()
-let __serialReadBusy = false;
-async function withReadLock(task) {
-    while (__serialReadBusy) {
-        await new Promise((r) => setTimeout(r, 10));
-    }
-    __serialReadBusy = true;
-    try {
-        return await task();
-    } finally {
-        __serialReadBusy = false;
-    }
-}
-
 async function connectToFaduino() {
     try {
         if (__testMode) {
@@ -2188,41 +1811,8 @@ async function connectToFaduino() {
             port = ports.length ? ports[0] : await navigator.serial.requestPort();
         }
 
-        // [CHG] 이미 열린 포트라도 reader/writer 없으면 초기화
         if (port.readable || port.writable) {
-            if (!reader || !writer) {
-                const decoder = new TextDecoderStream();
-                port.readable.pipeTo(decoder.writable);
-                reader = decoder.readable.getReader();
-
-                const encoder = new TextEncoderStream();
-                encoder.readable.pipeTo(port.writable);
-                writer = encoder.writable.getWriter();
-            }
             isConnected = true;
-
-            // [FIX] 하드락 중이면 유지보수 해제/상태체크 재개 금지
-            const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex';
-            const hardLock = !!(typeof window !== 'undefined' && window.__hardLock);
-            if (window && !isErrorVisible && !hardLock) {
-                window.__maintenanceMode = false;
-                if (window.startPeriodicStatusCheck) {
-                    window.startPeriodicStatusCheck();
-                }
-            }
-            const arduinoStatus = document.getElementById('arduino-status');
-            const machineStatus = document.getElementById('machine-status');
-            if (arduinoStatus) {
-                arduinoStatus.textContent = '정상';
-                arduinoStatus.style.color = '#00ff4c';
-            }
-            if (machineStatus) {
-                machineStatus.textContent = '가능';
-                machineStatus.style.color = '#00ff4c';
-            }
-            const isMainVisible = document.getElementById('main-screen')?.style.display === 'flex';
-            const inMaintenance = !!(window && window.__maintenanceMode);
-            if (isMainVisible) updateLoginButtonByStatus();
             return;
         }
 
@@ -2238,10 +1828,9 @@ async function connectToFaduino() {
 
         isConnected = true;
 
-        // [FIX] 하드락 중이면 유지보수 해제/상태체크 재개 금지
+        // [변경] 오류 화면 중에는 유지보수 모드 해제/상태체크 재개를 하지 않음
         const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex';
-        const hardLock = !!(typeof window !== 'undefined' && window.__hardLock);
-        if (window && !isErrorVisible && !hardLock) {
+        if (window && !isErrorVisible) {
             window.__maintenanceMode = false;
             if (window.startPeriodicStatusCheck) {
                 window.startPeriodicStatusCheck();
@@ -2258,9 +1847,16 @@ async function connectToFaduino() {
             machineStatus.textContent = '가능';
             machineStatus.style.color = '#00ff4c';
         }
+
+        // [수정] 메인 화면일 때만, 점검 모드가 아니면 상태에 맞게 버튼 갱신
+        // const isErrorVisible = document.getElementById('error-screen')?.style.display === 'flex'; // 중복 선언 제거
         const isMainVisible = document.getElementById('main-screen')?.style.display === 'flex';
         const inMaintenance = !!(window && window.__maintenanceMode);
-        if (isMainVisible) updateLoginButtonByStatus();
+        if (isMainVisible && !isErrorVisible && !inMaintenance) {
+            updateLoginButtonByStatus();
+        } else if (isMainVisible) {
+            updateLoginButtonByStatus();
+        }
     } catch (err) {
         console.error('Serial error:', err);
         isConnected = false;
@@ -2270,7 +1866,6 @@ async function connectToFaduino() {
 
 // ========== 이벤트 ==========
 loginButton.addEventListener('click', () => {
-    if (window.__hardLock) return; // [GUARD]
     loginPopup.style.display = 'flex';
     connectToFaduino();
 });
@@ -2448,15 +2043,19 @@ stopButton.addEventListener('click', async () => {
                 }
 
                 await writeCmd(commands[i].cmd);
+                // [추가] 각 명령 전송 후 짧은 지연시간을 주어 Serial1 통신 안정화
                 await new Promise((r) => setTimeout(r, 50));
 
                 if (commands[i].cmd === '3') {
+                    // 3번 명령은 'Sensor2 became LOW.'를 기다림
                     await waitForArduinoResponse('Sensor2 became LOW.');
                 } else if (commands[i].cmd === '4') {
+                    // [수정] 'Sensor1 became LOW.' 신호를 받은 후, 5초 더 기다렸다가 다음으로 진행
                     await waitForArduinoResponse('Sensor1 became LOW.');
+                    //await new Promise((r) => setTimeout(r, 3000));
                 } else {
-                    // [CHG] 닫힘 완료 신호 보강 + 여유 타임아웃
-                    await waitForDoorClosed({ timeoutMs: 20000 });
+                    // 2번 명령(문 닫기) 처리
+                    await waitForArduinoResponse('Door closed successfully!');
                 }
             }
             showScreen('main-screen');
@@ -2539,8 +2138,7 @@ keypad.parentNode.appendChild(keypadCloseButton);
 function updateLoginButtonByStatus() {
     if (!loginButton) return;
     const inMaintenance = !!(window && window.__maintenanceMode);
-    const hardLock = !!(window && window.__hardLock);
-    if (inMaintenance || hardLock) {
+    if (inMaintenance) {
         loginButton.disabled = true;
         loginButton.textContent = '고객센터 : 1644-1224';
         loginButton.style.display = 'inline-block';
@@ -2557,93 +2155,23 @@ function updateLoginButtonByStatus() {
     }
 }
 
-// [NEW] 페이지 로드 시 자동 새로고침 (최초 1회만)
+// 전역: 처리되지 않은 Promise 거부 캐치 → 장치 분리시 사용자 안내
 if (typeof window !== 'undefined') {
-    // sessionStorage로 새로고침 루프 방지
-    const hasReloaded = sessionStorage.getItem('petmon.hasReloaded');
-
-    if (!hasReloaded) {
-        sessionStorage.setItem('petmon.hasReloaded', '1');
-
-        // 페이지 로드 완료 후 즉시 새로고침
-        // window.addEventListener('load', () => {
-        //     setTimeout(() => {
-        //         window.location.reload();
-        //     }, 500);
-        // });
-    }
-
-    // 메인 화면 표시 시 세션 플래그 제거 (다음 방문을 위해)
-    const observer = new MutationObserver(() => {
-        const mainScreen = document.getElementById('main-screen');
-        if (mainScreen && mainScreen.style.display === 'flex') {
-            sessionStorage.removeItem('petmon.hasReloaded');
-        }
-    });
-
-    // DOM 변화 감지
-    if (document.body) {
-        observer.observe(document.body, {
-            attributes: true,
-            subtree: true,
-            attributeFilter: ['style'],
-        });
-    }
-
-    // 이전 세션에서 플래그된 경우: 자동으로 포트를 열어 'X' 전송 (사용자 입력 없이, 기존 권한만 사용)
-    (async () => {
+    window.addEventListener('unhandledrejection', (event) => {
+        // 장치 분리 안내 우선 처리
         try {
-            if (sessionStorage.getItem('petmon.stopOnReload') === '1') {
-                sessionStorage.removeItem('petmon.stopOnReload');
-
-                if ('serial' in navigator) {
-                    const ports = await navigator.serial.getPorts(); // 이전에 허용된 포트만 반환
-                    let chosen = null;
-                    if (ports && ports.length) {
-                        try {
-                            chosen =
-                                ports.find((p) => {
-                                    try {
-                                        return matchesPreferred(p);
-                                    } catch {
-                                        return false;
-                                    }
-                                }) || ports[0];
-                        } catch {
-                            chosen = ports[0];
-                        }
-                    }
-                    if (chosen) {
-                        port = chosen;
-                        if (!port.readable && !port.writable) {
-                            await port.open({ baudRate: 9600 });
-                        }
-                        const decoder = new TextDecoderStream();
-                        port.readable.pipeTo(decoder.writable);
-                        reader = decoder.readable.getReader();
-
-                        const encoder = new TextEncoderStream();
-                        encoder.readable.pipeTo(port.writable);
-                        writer = encoder.writable.getWriter();
-
-                        isConnected = true;
-
-                        try {
-                            await writeCmd('X'); // 모터 정지 신호
-                            try {
-                                // 에러 화면 없이 조용히 대기/무시
-                                await waitForArduinoResponse('Motor stopped.', { timeoutMs: 3000, silent: true });
-                            } catch {}
-                        } catch (e) {
-                            console.error('Auto X on reload failed to write:', e);
-                        }
-                    }
-                }
+            if (handleDeviceLost(event.reason)) {
+                event.preventDefault?.();
+                return;
             }
-        } catch (e) {
-            console.error('Auto-stop on reload init failed:', e);
-        }
-    })();
+        } catch {}
+
+        // 추가: 모든 미처리 거부를 에러 로그로 남김
+        try {
+            const reason = event && event.reason !== undefined ? event.reason : '(no reason)';
+            appendErrorLog(`[${nowTs()}] UNHANDLED_REJECTION ${__errorToText(reason)}`);
+        } catch {}
+    });
 
     // 전역 런타임 에러 핸들링 → 파일에 기록
     window.addEventListener('error', (ev) => {
@@ -2739,7 +2267,7 @@ if (typeof window !== 'undefined') {
         __testMode = false;
         updateTestBadge();
         if (testControls) testControls.style.display = 'none';
-        // 관리자 모드 종료 시 세션 제거
+        // [ADD] 관리자 모드 종료 시 세션 제거
         try {
             sessionStorage.removeItem('petmon.adminPinOK');
         } catch {}
@@ -2758,7 +2286,7 @@ if (typeof window !== 'undefined') {
             testControls.appendChild(exitBtn);
         }
 
-        // 새로고침 버튼
+        // [ADD] 새로고침 버튼
         let refreshBtn = document.getElementById('btn-refresh-page');
         if (!refreshBtn) {
             refreshBtn = document.createElement('button');
@@ -2770,18 +2298,6 @@ if (typeof window !== 'undefined') {
                 window.location.reload();
             });
             testControls.appendChild(refreshBtn);
-        }
-        let chooseBtn = document.getElementById('btn-choose-serial');
-        if (!chooseBtn) {
-            chooseBtn = document.createElement('button');
-            chooseBtn.id = 'btn-choose-serial';
-            chooseBtn.textContent = '포트 선택(목록)';
-            chooseBtn.style.cssText =
-                'font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #475569;background:#111827;color:#e5e7eb;cursor:pointer;';
-            chooseBtn.addEventListener('click', async () => {
-                await chooseSerialPort(); // 선택 창 열기
-            });
-            testControls.appendChild(chooseBtn);
         }
     }
 
@@ -2850,7 +2366,7 @@ if (typeof window !== 'undefined') {
     }
     updateTestBadge();
 }
-// Bottom arrow helpers (tip+body with animation)
+// [ADD] Bottom arrow helpers (tip+body with animation)
 function showBottomArrowAt(px) {
     try {
         // Inject styles once
