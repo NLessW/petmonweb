@@ -753,6 +753,14 @@ async function chooseSerialPort() {
     }
 }
 async function appendErrorLog(line) {
+    // Prepend current phone number (if any) so 누가 에러를 냈는지 추적 가능
+    try {
+        const mobileTag = currentPhoneNumber || '-';
+        line = `[mobile:${mobileTag}] ${String(line)}`;
+    } catch (e) {
+        // 무시하고 진행
+    }
+
     // 0) 사용자가 지정한 파일(지속 핸들)로 먼저 시도
     try {
         if (await __appendToSelectedFile(line)) return; // 성공 시 끝
