@@ -68,6 +68,7 @@ int in3_Pin = 9;
 // Inverter PIN
 int inverterPin = 50;
 int fwdPin = 40;
+int reversePin = 39;
 
 // LED PIN
 int led_Red = 46;
@@ -88,6 +89,7 @@ bool errorState = false; // 오류 상태 플래그
 
 bool login = false;  // 로그인 상태 변수
 bool adminMode = false; // [ADD] 관리자 모드 여부
+bool reverseModeActive = false; // [ADD] 리버스 모드 상태 변수
 
 // [ADD] 라벨 모터 시작 시간 (명령 트리거 공유)
 unsigned long labelMotorStartMs = 0;
@@ -127,7 +129,7 @@ void setup() {
 
     pinMode(inverterPin, OUTPUT);
     pinMode(fwdPin, OUTPUT);
-
+    pinMode(reversePin, OUTPUT);
     pinMode(led_Red, OUTPUT);
     pinMode(led_Blue, OUTPUT);
 
@@ -271,6 +273,8 @@ void loop() {
                 case 'C': triggerLabelCutter(); break; // [ADD] 수동 라벨 커터 트리거
                 case 't':
                 case 'T': retryLabelCutter(); break; // [ADD] 띠 분리기 재시도 (문 열림 없음)
+                case 'V':
+                case 'v': fa50Reverse(); break; // FA50 리버스 ON
                 case 'm':
                 case 'M' : mc12bOff(); break; // mc12b off
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
@@ -642,7 +646,7 @@ void justOpenDoor() {
 
 void executeOpenDoor() {
     digitalWrite(inverterPin, HIGH);
-    digitalWrite(fwdPin, HIGH);
+    digitalWrite(fwdPin, reverseModeActive ? LOW : HIGH); // [MOD] 리버스 모드에 따라 FWD 신호 반전
     Serial1.println("Knife activated!");
     
     door_open_state = digitalRead(openDoor_Sensor);
@@ -758,6 +762,7 @@ void executeSensor1Motor() {
     
     if (seesaw_State2 == HIGH) {
         Serial1.println("Sensor2 is HIGH. Starting 24V motor (direction 1)...");
+
         unsigned long startMs = millis();
         while (seesaw_State2 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
@@ -865,7 +870,22 @@ void checkSerialForSpeedUpdate() {
         break;
     }
 }
+void fa50Reverse(){
+    reverseModeActive = !reverseModeActive; // 리버스 모드 토글
+    digitalWrite(reversePin, reverseModeActive ? HIGH : LOW); // 상태에 따라 reversePin 제어
 
+    if (reverseModeActive) {
+        Serial1.println("Reverse mode ACTIVATED. FWD logic is now inverted (LOW = ON).");
+        // 리버스 모드 활성화 시, fwdPin을 LOW로 설정하여 즉시 작동 시작
+        digitalWrite(fwdPin, LOW);
+        Serial1.println("FWD pin set to LOW to start motor in reverse mode.");
+    } else {
+        Serial1.println("Reverse mode DEACTIVATED. FWD logic is restored (HIGH = ON).");
+        // 리버스 모드 비활성화 시, fwdPin을 LOW로 설정하여 모터 정지 (stopMotor 로직과 일관성)
+        digitalWrite(fwdPin, LOW);
+        Serial1.println("FWD pin set to LOW to stop motor.");
+    }
+}
 void parseAndSetSpeeds(String cmd) {
     // SPD:DO=255;DC=120;D1=70;D2=90 형식 파싱
     bool changed = false;
@@ -947,6 +967,14 @@ void stopMotor(){
     digitalWrite(in1_Pin, LOW);
     digitalWrite(in2_Pin, LOW);
     analogWrite(ena_Pin, 0);
+
+    // [ADD] 리버스 모드였으면 비활성화하고 원래 로직으로 복구
+    if (reverseModeActive) {
+        reverseModeActive = false;
+        digitalWrite(reversePin, LOW);
+        Serial1.println("Reverse mode DEACTIVATED by stop command. FWD logic restored.");
+    }
+
     Serial1.println("Motor stopped.");
     login = false;  // 로그인 상태를 false로 변경
         // Allow next label cycle
@@ -974,11 +1002,11 @@ void repairMode(){
     if(seesaw_State1 == HIGH && seesaw_State2 == HIGH){
         // inverter 상태 확인 후 fwd 신호까지 보내서 끼임 제거
         if(inverter_State == HIGH) {
-            digitalWrite(fwdPin, HIGH);
+            digitalWrite(fwdPin, reverseModeActive ? LOW : HIGH); // [MOD] 리버스 모드에 따라 FWD 신호 반전
             Serial1.println("Repair mode activated: Inverter and FWD ON to clear jam.");
         } else if(inverter_State == LOW){
             digitalWrite(inverterPin, HIGH);
-            digitalWrite(fwdPin, HIGH);
+            digitalWrite(fwdPin, reverseModeActive ? LOW : HIGH); // [MOD] 리버스 모드에 따라 FWD 신호 반전
             Serial1.println("Repair mode activated: Inverter ON and FWD ON to clear jam.");
         }
         
