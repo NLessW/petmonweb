@@ -25,6 +25,7 @@
                     <button id="btn-query" disabled>속도 조회</button>
                     <button id="btn-help" disabled>도움말</button>
                     <button id="btn-repair" disabled>자가 수리</button>
+                    <button id="btn-ai-test" disabled>AI 테스트</button>
                     <button id="btn-logout" class="secondary" disabled>로그아웃</button>
                     <button id="btn-go-main" class="secondary" style="background: #444" title="속도 저장 후 메인으로">
                         메인으로
@@ -158,8 +159,6 @@
                     <button data-cmd="3" class="quick" disabled>24V 모터 방향1 (3)</button>
                     <button data-cmd="4" class="quick" disabled>24V 모터 방향2 (4)</button>
                     <button data-cmd="5" class="quick" disabled>전체 자동 (5)</button>
-                    <button data-cmd="M" class="quick" disabled>전자개폐기 OFF (M)</button>
-                    <button data-cmd="V" class="quick" disabled>FA-50 역방향 (V)</button>
                     <button data-cmd="0" class="quick secondary" disabled>센서 상태 (0)</button>
                     <button data-cmd="X" class="quick danger" disabled>긴급 정지 (X)</button>
                 </div>
@@ -182,6 +181,20 @@
             </div>
             <pre id="log"></pre>
             <div id="resize-handle"></div>
+        </div>
+        <!-- 플로팅 카메라 화면 창-->
+        <div id="camera-container">
+            <div id="camera-header">
+                <h3>AI ZONE Screen</h3>
+                <div id="camera-controls">
+                    <button id="btn-minimize-camera">_</button>
+                    <button id="btn-close-camera">✕</button>
+                </div>
+            </div>
+            <div id="camera-video">
+                <video id="camera-video-element" autoplay muted playsinline></video>
+            </div>
+            <div id="camera-resize-handle"></div>
         </div>
 
         <script src="./adminMachine.js"></script>
@@ -298,6 +311,127 @@
                         container.classList.remove('hidden');
                     }
                 });
+            })();
+
+            // 카메라 창 드래그 이동 및 크기 조절
+            (function () {
+                const container = document.getElementById('camera-container');
+                const header = document.getElementById('camera-header');
+                const resizeHandle = document.getElementById('camera-resize-handle');
+                const videoWrapper = document.getElementById('camera-video');
+                const videoEl = document.getElementById('camera-video-element');
+
+                let isDragging = false;
+                let isResizing = false;
+                let startX, startY, startLeft, startTop, startWidth, startHeight;
+                let stream = null;
+
+                // 카메라 시작
+                async function startCamera() {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: { width: 640, height: 480 },
+                            audio: false,
+                        });
+                        videoEl.srcObject = stream;
+                    } catch (err) {
+                        console.error('카메라 접근 오류:', err);
+                        videoWrapper.innerHTML = '<div style="color:#ff4d4d;text-align:center;">카메라 접근 불가</div>';
+                    }
+                }
+
+                // 드래그 이동
+                function startDrag(e) {
+                    if (e.target.closest('#camera-controls') || e.target.closest('#camera-resize-handle')) return;
+                    isDragging = true;
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = container.getBoundingClientRect();
+                    startLeft = rect.left;
+                    startTop = rect.top;
+                    container.style.transition = 'none';
+                }
+
+                header.addEventListener('mousedown', startDrag);
+                header.addEventListener('touchstart', startDrag, { passive: true });
+
+                // 크기 조절 시작
+                function startResize(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    isResizing = true;
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = container.getBoundingClientRect();
+                    startWidth = rect.width;
+                    startHeight = rect.height;
+                    container.style.transition = 'none';
+                }
+
+                resizeHandle.addEventListener('mousedown', startResize);
+                resizeHandle.addEventListener('touchstart', startResize, { passive: false });
+
+                // 이동 및 크기 조절 처리
+                function handleMove(e) {
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+                    if (isDragging) {
+                        const dx = clientX - startX;
+                        const dy = clientY - startY;
+                        container.style.left = startLeft + dx + 'px';
+                        container.style.top = startTop + dy + 'px';
+                        container.style.right = 'auto';
+                        container.style.bottom = 'auto';
+                    } else if (isResizing) {
+                        const dx = clientX - startX;
+                        const dy = clientY - startY;
+                        const newWidth = Math.max(300, startWidth + dx);
+                        const newHeight = Math.max(200, startHeight + dy);
+                        container.style.width = newWidth + 'px';
+                        container.style.height = newHeight + 'px';
+                    }
+                }
+
+                document.addEventListener('mousemove', handleMove);
+                document.addEventListener('touchmove', handleMove, { passive: true });
+
+                function endDragOrResize() {
+                    isDragging = false;
+                    isResizing = false;
+                    container.style.transition = '';
+                }
+
+                document.addEventListener('mouseup', endDragOrResize);
+                document.addEventListener('touchend', endDragOrResize);
+
+                // 카메라 제어 버튼
+                document.getElementById('btn-minimize-camera').addEventListener('click', () => {
+                    container.classList.toggle('minimized');
+                });
+
+                document.getElementById('btn-close-camera').addEventListener('click', () => {
+                    container.classList.add('hidden');
+                    if (stream) {
+                        stream.getTracks().forEach((track) => track.stop());
+                        stream = null;
+                    }
+                });
+
+                // 더블클릭으로 카메라창 다시 열기
+                document.addEventListener('dblclick', (e) => {
+                    if (container.classList.contains('hidden') && e.target === document.body) {
+                        container.classList.remove('hidden');
+                        if (!stream) startCamera();
+                    }
+                });
+
+                // 페이지 로드 시 카메라 시작
+                startCamera();
             })();
         </script>
     </body>
