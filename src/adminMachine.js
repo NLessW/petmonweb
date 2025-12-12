@@ -47,6 +47,7 @@ function setConnected(on) {
     document.getElementById('btn-repair').disabled = !on;
     document.getElementById('btn-connect').disabled = false;
     document.getElementById('btn-help').disabled = !on;
+    document.getElementById('btn-ai-test').disabled = false;
 }
 function setLoggedIn(on) {
     loggedIn = on;
@@ -61,9 +62,204 @@ function setLoggedIn(on) {
         setTimeout(() => sendCurrentSpeeds(true), 300);
     }
 }
+
+// 포트 선택 UI 표시
+async function showPortSelectionUI(ports) {
+    return new Promise((resolve) => {
+        // 모달 오버레이 생성
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+
+        // 모달 컨테이너
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: #1a1a1a;
+            border: 2px solid #3772ff;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            color: #fff;
+        `;
+
+        // 제목
+        const title = document.createElement('h2');
+        title.textContent = '시리얼 포트 선택';
+        title.style.cssText = 'margin: 0 0 16px 0; font-size: 1.5rem; color: #3772ff;';
+        modal.appendChild(title);
+
+        // 설명
+        const desc = document.createElement('p');
+        desc.textContent = `${ports.length}개의 포트가 발견되었습니다. 연결할 포트를 선택하세요:`;
+        desc.style.cssText = 'margin: 0 0 16px 0; color: #aaa;';
+        modal.appendChild(desc);
+
+        // 포트 목록
+        ports.forEach((p, index) => {
+            const info = p.getInfo();
+            const btn = document.createElement('button');
+
+            // 포트 이름 가져오기 (Web Serial API에서는 직접 이름을 가져올 수 없음)
+            // VID/PID로 일반적인 이름 추론
+            let portName = 'USB Serial Port';
+            if (info.usbVendorId === 1659 && info.usbProductId === 8963) {
+                portName = 'Prolific PL2303 USB Serial';
+            } else if (info.usbVendorId === 6790 && info.usbProductId === 29987) {
+                portName = 'CH340 USB Serial';
+            } else if (info.usbVendorId === 1027 && info.usbProductId === 24577) {
+                portName = 'FTDI USB Serial';
+            } else if (info.usbVendorId === 4292 && info.usbProductId === 60000) {
+                portName = 'Silicon Labs CP210x';
+            }
+
+            const vid = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, '0')}` : 'N/A';
+            const pid = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, '0')}` : 'N/A';
+
+            btn.innerHTML = `
+                <div style="text-align: left;">
+                    <div style="font-weight: bold; margin-bottom: 4px;">${portName}</div>
+                    <div style="font-size: 0.85rem; color: #888;">VID=${vid} PID=${pid}</div>
+                </div>
+            `;
+            btn.style.cssText = `
+                display: block;
+                width: 100%;
+                padding: 12px;
+                margin-bottom: 8px;
+                background: #2d2d2d;
+                border: 1px solid #444;
+                border-radius: 6px;
+                color: #fff;
+                font-size: 1rem;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+
+            btn.onmouseover = () => {
+                btn.style.background = '#3772ff';
+                btn.style.borderColor = '#3772ff';
+            };
+            btn.onmouseout = () => {
+                btn.style.background = '#2d2d2d';
+                btn.style.borderColor = '#444';
+            };
+
+            btn.onclick = () => {
+                document.body.removeChild(overlay);
+                resolve(p);
+            };
+
+            modal.appendChild(btn);
+        });
+
+        // 새 포트 추가 버튼
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+ 새 포트 추가';
+        addBtn.style.cssText = `
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            background: #2d2d2d;
+            border: 1px solid #3772ff;
+            border-radius: 6px;
+            color: #3772ff;
+            font-size: 1rem;
+            cursor: pointer;
+        `;
+        addBtn.onclick = async () => {
+            document.body.removeChild(overlay);
+            try {
+                const newPort = await navigator.serial.requestPort();
+                resolve(newPort);
+            } catch (e) {
+                resolve(null);
+            }
+        };
+        modal.appendChild(addBtn);
+
+        // 취소 버튼
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '취소';
+        cancelBtn.style.cssText = `
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            background: #444;
+            border: 1px solid #666;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+        `;
+        cancelBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(null);
+        };
+        modal.appendChild(cancelBtn);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+    });
+}
+
 async function connect() {
     try {
-        port = await navigator.serial.requestPort();
+        // 기존 연결이 있으면 먼저 정리
+        if (port) {
+            appendLog('기존 포트 연결 정리 중...', 'info');
+            try {
+                await gracefulDisconnect(false);
+            } catch (e) {
+                appendLog('기존 연결 정리 실패: ' + e.message, 'err');
+            }
+            await new Promise((r) => setTimeout(r, 500));
+        }
+
+        // 포트 목록 가져오기
+        const ports = await navigator.serial.getPorts();
+        appendLog(`권한이 있는 포트: ${ports.length}개`, 'info');
+
+        let selectedPort = null;
+
+        if (ports.length === 0) {
+            // 포트가 없으면 새로 권한 요청
+            appendLog('포트 선택 창을 엽니다...', 'info');
+            selectedPort = await navigator.serial.requestPort();
+        } else if (ports.length === 1) {
+            // 포트가 하나면 자동 선택
+            selectedPort = ports[0];
+            const info = selectedPort.getInfo();
+            appendLog(
+                `포트 1개 발견 - 자동 선택: VID=${info.usbVendorId || 'N/A'} PID=${info.usbProductId || 'N/A'}`,
+                'info'
+            );
+        } else {
+            // 여러 포트가 있으면 선택 UI 표시
+            selectedPort = await showPortSelectionUI(ports);
+            if (!selectedPort) {
+                appendLog('포트 선택이 취소되었습니다.', 'err');
+                return;
+            }
+        }
+
+        port = selectedPort;
+        const portInfo = port.getInfo();
+        appendLog(`선택된 포트: VID=${portInfo.usbVendorId || 'N/A'} PID=${portInfo.usbProductId || 'N/A'}`, 'info');
+
+        appendLog('포트 열기 시도 (baudRate: 9600)...', 'info');
         await port.open({ baudRate: 9600 });
         const decoder = new TextDecoderStream();
         port.readable.pipeTo(decoder.writable);
@@ -74,9 +270,20 @@ async function connect() {
         setConnected(true);
         keepReading = true;
         readLoop();
-        appendLog('포트 연결 성공');
+        appendLog('✓ 포트 연결 성공', 'info');
     } catch (e) {
-        appendLog('연결 실패: ' + e.message, 'err');
+        if (e.name === 'NotFoundError' || e.message.includes('No port selected')) {
+            appendLog('포트 선택이 취소되었습니다. 다시 시도해주세요.', 'err');
+        } else if (e.name === 'InvalidStateError') {
+            appendLog('포트가 이미 다른 프로그램에서 사용 중입니다. 다른 프로그램을 종료하고 다시 시도하세요.', 'err');
+        } else if (e.name === 'NetworkError' || e.message.includes('ACCESS_DENIED')) {
+            appendLog('포트 접근 거부: 다른 프로그램(Arduino IDE 등)을 종료하거나 USB를 다시 연결하세요.', 'err');
+        } else {
+            appendLog('연결 실패 [' + e.name + ']: ' + e.message, 'err');
+            console.error('Serial connection error:', e);
+        }
+        setConnected(false);
+        port = null;
     }
 }
 async function readLoop() {
@@ -153,7 +360,13 @@ function handleAutoLoginDetect(text) {
 }
 
 function parseSpeedsFromDevice(line) {
-    // SPEEDS:DO=255;DC=120;D1=70;D2=90 파싱
+    // SPEEDS:DO=255;DC=120;D1=70;D2=90 파싱 후 로컬 스토리지 저장
+    // 로컬 스토리지에 저장하여 업로드 후에 속도 리셋 되는 현상 방지
+    localStorage.setItem('speed-do', (line.match(/DO=(\d+)/) || [])[1] || '');
+    localStorage.setItem('speed-dc', (line.match(/DC=(\d+)/) || [])[1] || '');
+    localStorage.setItem('speed-d1', (line.match(/D1=(\d+)/) || [])[1] || '');
+    localStorage.setItem('speed-d2', (line.match(/D2=(\d+)/) || [])[1] || '');
+
     const doMatch = line.match(/DO=(\d+)/);
     const dcMatch = line.match(/DC=(\d+)/);
     const d1Match = line.match(/D1=(\d+)/);
@@ -226,6 +439,104 @@ document.getElementById('btn-logout').onclick = () => send('L');
 document.getElementById('btn-go-main').onclick = async (e) => {
     e.target.disabled = true;
     await gracefulDisconnect(true);
+};
+document.getElementById('btn-ai-test').onclick = () => {
+    (async () => {
+        const btn = document.getElementById('btn-ai-test');
+        btn.disabled = true;
+        try {
+            const classifierModule = await import('./adminClassifier.js');
+            if (!classifierModule || !classifierModule.classifyBottleSamples) {
+                appendLog('AI 모듈에서 classifyBottleSamples를 찾을 수 없습니다.', 'err');
+                return;
+            }
+
+            // 팝업 생성 (로딩 표시)
+            const overlay = document.createElement('div');
+            overlay.style.cssText =
+                'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            const modal = document.createElement('div');
+            modal.style.cssText =
+                'width:90%;max-width:860px;max-height:90vh;overflow:auto;background:#0f172a;border-radius:10px;padding:18px;border:1px solid #1e293b;color:#e2e8f0;';
+            modal.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><strong style="font-size:1.1rem">AI 테스트 (샘플 이미지 및 결과)</strong><button id="ai-test-close" style="background:#111827;color:#cbd5e1;border-radius:6px;padding:6px 10px;border:1px solid #374151;cursor:pointer">닫기</button></div><div id="ai-test-body">테스트 이미지 수집 중...</div>`;
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            const closeBtn = modal.querySelector('#ai-test-close');
+            closeBtn.onclick = () => {
+                try {
+                    document.body.removeChild(overlay);
+                } catch (e) {}
+            };
+
+            const body = modal.querySelector('#ai-test-body');
+            body.innerHTML = `<div style="color:#9ca3af;margin-bottom:8px">카메라 접근 및 ${5}회 샘플 수집 중입니다. 잠시만 기다려주세요...</div>`;
+
+            // 수집 (5 samples) — index.js와 동일한 샘플 수를 사용
+            const SAMPLES = 5;
+            const samples = await classifierModule.classifyBottleSamples(SAMPLES, 300);
+
+            // 결과 렌더링
+            const parts = [];
+            // aggregate top classes summary
+            const topSummary = [];
+            samples.forEach((s, idx) => {
+                // determine top class for the sample
+                let top = null;
+                let topProb = -1;
+                for (const [k, v] of Object.entries(s.scores)) {
+                    if (v > topProb) {
+                        top = k;
+                        topProb = v;
+                    }
+                }
+                topSummary.push({ idx: idx + 1, top, prob: topProb });
+
+                const predLines = Object.entries(s.scores)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => `${k}: ${(v * 100).toFixed(2)}%`)
+                    .join('<br>');
+
+                parts.push(`
+                    <div style="display:flex;gap:12px;align-items:flex-start;padding:8px;border-bottom:1px solid #111827;">
+                        <div style="width:160px;flex:0 0 160px;">
+                            ${
+                                s.image
+                                    ? `<img src="${s.image}" style="width:160px;border-radius:6px;border:1px solid #111827;"/>`
+                                    : `<div style="width:160px;height:120px;background:#071024;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#6b7280">이미지 없음</div>`
+                            }
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-weight:700;margin-bottom:6px;color:#e6f0ff">샘플 ${
+                                idx + 1
+                            } — 최상위: <span style="color:#77f3a5">${top}</span> (${(topProb * 100).toFixed(2)}%)</div>
+                            <div style="font-size:0.95rem;color:#cbd5e1;line-height:1.4">${predLines}</div>
+                        </div>
+                    </div>
+                `);
+            });
+
+            // aggregated summary across samples (count top occurrences)
+            const aggCounts = {};
+            topSummary.forEach((t) => {
+                aggCounts[t.top] = (aggCounts[t.top] || 0) + 1;
+            });
+            const aggHtml = Object.entries(aggCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([k, v]) => `<div style="margin-right:12px">${k}: ${v}/${SAMPLES}</div>`)
+                .join('');
+
+            body.innerHTML = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;color:#cbd5e1"><div style="font-weight:700">요약:</div><div style="display:flex;">${aggHtml}</div></div>${parts.join(
+                ''
+            )}`;
+        } catch (e) {
+            appendLog('AI 테스트 오류: ' + (e && e.message ? e.message : String(e)), 'err');
+            console.error(e);
+            alert('AI 테스트 중 오류가 발생했습니다. 콘솔 로그를 확인하세요.');
+        } finally {
+            btn.disabled = false;
+        }
+    })();
 };
 buttonsQuick.forEach((b) => (b.onclick = () => send(b.dataset.cmd)));
 

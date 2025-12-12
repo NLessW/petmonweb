@@ -2196,6 +2196,8 @@ async function runCloseClassifyCollectSequence() {
 
     // 3. 판별중
     renderProcess('scan', '자원을 판별하는 중입니다...', 2);
+    await writeCmd('6');
+    await waitForAnyArduinoResponse(['led blink success'], { timeoutMs: 8000, silent: true });
     await writeCmd('3');
     await waitForArduinoResponse('Motor task completed!');
     await new Promise((r) => setTimeout(r, 3000));
@@ -2714,7 +2716,22 @@ if (typeof window !== 'undefined') {
             }
             return;
         }
-
+        // Ctrl+Alt+C: 띠 분리기 단계 완전 스킵 (바로 문 열기)
+        if (e.ctrlKey && e.altKey && (e.key === 'c' || e.key === 'C')) {
+            try {
+                if (writer && isConnected) {
+                    // 띠 분리기를 완전히 건너뛰고 바로 문 열기 명령 전송
+                    console.log('띠 분리기 스킵: 바로 문 열기 명령 전송');
+                    await writeCmd('1'); // 문 열기
+                    console.log('문 열기 명령 전송 완료');
+                } else {
+                    console.warn('시리얼 연결이 없어서 띠 분리기 스킵 불가');
+                }
+            } catch (err) {
+                console.error('띠 분리기 스킵 처리 실패:', err);
+            }
+            return;
+        }
         if (e.ctrlKey && e.altKey && (e.key === 'l' || e.key === 'L')) {
             try {
                 if (!navigator?.storage?.getDirectory) return alert('로그 파일 시스템 접근을 지원하지 않습니다.');
