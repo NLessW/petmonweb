@@ -362,31 +362,38 @@ function handleAutoLoginDetect(text) {
 function parseSpeedsFromDevice(line) {
     // SPEEDS:DO=255;DC=120;D1=70;D2=90 파싱 후 로컬 스토리지 저장
     // 로컬 스토리지에 저장하여 업로드 후에 속도 리셋 되는 현상 방지
-    localStorage.setItem('speed-do', (line.match(/DO=(\d+)/) || [])[1] || '');
-    localStorage.setItem('speed-dc', (line.match(/DC=(\d+)/) || [])[1] || '');
-    localStorage.setItem('speed-d1', (line.match(/D1=(\d+)/) || [])[1] || '');
-    localStorage.setItem('speed-d2', (line.match(/D2=(\d+)/) || [])[1] || '');
-
     const doMatch = line.match(/DO=(\d+)/);
     const dcMatch = line.match(/DC=(\d+)/);
     const d1Match = line.match(/D1=(\d+)/);
     const d2Match = line.match(/D2=(\d+)/);
 
-    if (doMatch) {
-        document.getElementById('speed-do').value = doMatch[1];
-        document.getElementById('speed-do-range').value = doMatch[1];
+    // 펌웨어에서 받은 값을 로컬 스토리지에 저장
+    if (doMatch) localStorage.setItem('speed-do', doMatch[1]);
+    if (dcMatch) localStorage.setItem('speed-dc', dcMatch[1]);
+    if (d1Match) localStorage.setItem('speed-d1', d1Match[1]);
+    if (d2Match) localStorage.setItem('speed-d2', d2Match[1]);
+
+    // UI에 반영 (로컬 스토리지 값이 있으면 그것을, 없으면 펌웨어 값을 사용)
+    const doValue = localStorage.getItem('speed-do') || (doMatch && doMatch[1]);
+    const dcValue = localStorage.getItem('speed-dc') || (dcMatch && dcMatch[1]);
+    const d1Value = localStorage.getItem('speed-d1') || (d1Match && d1Match[1]);
+    const d2Value = localStorage.getItem('speed-d2') || (d2Match && d2Match[1]);
+
+    if (doValue) {
+        document.getElementById('speed-do').value = doValue;
+        document.getElementById('speed-do-range').value = doValue;
     }
-    if (dcMatch) {
-        document.getElementById('speed-dc').value = dcMatch[1];
-        document.getElementById('speed-dc-range').value = dcMatch[1];
+    if (dcValue) {
+        document.getElementById('speed-dc').value = dcValue;
+        document.getElementById('speed-dc-range').value = dcValue;
     }
-    if (d1Match) {
-        document.getElementById('speed-d1').value = d1Match[1];
-        document.getElementById('speed-d1-range').value = d1Match[1];
+    if (d1Value) {
+        document.getElementById('speed-d1').value = d1Value;
+        document.getElementById('speed-d1-range').value = d1Value;
     }
-    if (d2Match) {
-        document.getElementById('speed-d2').value = d2Match[1];
-        document.getElementById('speed-d2-range').value = d2Match[1];
+    if (d2Value) {
+        document.getElementById('speed-d2').value = d2Value;
+        document.getElementById('speed-d2-range').value = d2Value;
     }
 }
 
@@ -558,11 +565,14 @@ function sendCurrentSpeeds(initial = false) {
     }
 }
 
-// 입력 변경 자동 전송 (디바운스 100ms)
+// 입력 변경 자동 전송 (디바운스 100ms) + 로컬 스토리지 저장
 ['speed-do', 'speed-dc', 'speed-d1', 'speed-d2'].forEach((id) => {
     const el = document.getElementById(id);
     ['input', 'change'].forEach((ev) => {
         el.addEventListener(ev, () => {
+            // 로컬 스토리지에 즉시 저장
+            localStorage.setItem(id, el.value);
+
             if (!loggedIn) return; // 로그인 전에는 전송 안함
             clearTimeout(speedDebounce);
             const msg = document.getElementById('auto-speed-msg');
@@ -587,7 +597,9 @@ linkPairs.forEach(([rangeId, numId]) => {
     if (!r || !n) return;
     r.addEventListener('input', () => {
         n.value = r.value;
+        // 슬라이더 값 변경 시에도 로컬 스토리지에 저장
         if (numId.startsWith('speed-')) {
+            localStorage.setItem(numId, r.value);
             if (!loggedIn) return;
             clearTimeout(speedDebounce);
             const msg = document.getElementById('auto-speed-msg');
@@ -709,6 +721,23 @@ function endHold(e) {
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') clearHoldTimers();
 });
+
+// 페이지 로드 시 로컬 스토리지에서 속도 값 불러오기
+function loadSpeedsFromLocalStorage() {
+    const speedIds = ['speed-do', 'speed-dc', 'speed-d1', 'speed-d2'];
+    speedIds.forEach((id) => {
+        const savedValue = localStorage.getItem(id);
+        if (savedValue) {
+            const numInput = document.getElementById(id);
+            const rangeInput = document.getElementById(id + '-range');
+            if (numInput) numInput.value = savedValue;
+            if (rangeInput) rangeInput.value = savedValue;
+        }
+    });
+}
+
+// 페이지 로드 시 실행
+loadSpeedsFromLocalStorage();
 
 // 시리얼 미지원 안내
 if (!('serial' in navigator)) {
