@@ -748,6 +748,7 @@ if (!('serial' in navigator)) {
 // ================= 유지보수/점검 토글 =================
 const DEV_FLAG = 'petmon.deviceMaintenance';
 const GBL_FLAG = 'petmon.globalMaintenance';
+const CBL_FLAG = 'petmon.Collection';
 
 // 변경사항: 상태 변경 브로드캐스트 유틸
 function broadcastMaintChange() {
@@ -761,6 +762,7 @@ function broadcastMaintChange() {
                 detail: {
                     device: sessionStorage.getItem(DEV_FLAG) === '1' || !!window.__maintenanceMode,
                     global: sessionStorage.getItem(GBL_FLAG) === '1',
+                    collection: sessionStorage.getItem(CBL_FLAG) === '1',
                 },
             })
         );
@@ -773,6 +775,11 @@ function isDeviceMaintOn() {
 function isGlobalMaintOn() {
     return sessionStorage.getItem(GBL_FLAG) === '1';
 }
+
+function isCollectionModeOn() {
+    return sessionStorage.getItem(CBL_FLAG) === '1';
+}
+
 function setStatus(el, text, cls) {
     if (!el) return;
     el.textContent = text;
@@ -802,8 +809,10 @@ function reflectMaintButtons() {
     try {
         const devOn = isDeviceMaintOn();
         const gblOn = isGlobalMaintOn();
+        const cblOn = isCollectionModeOn();
         const bDev = document.getElementById('btn-maint-device');
         const bGbl = document.getElementById('btn-maint-global');
+        const cBl = document.getElementById('btn-collection');
         if (bDev) {
             bDev.textContent = devOn ? '기기 점검 (ON)' : '기기 점검';
             bDev.style.outline = devOn ? '2px solid #93c5fd' : '';
@@ -813,6 +822,11 @@ function reflectMaintButtons() {
             bGbl.textContent = gblOn ? '전체 점검 (ON)' : '전체 점검';
             bGbl.style.outline = gblOn ? '2px solid #fca5a5' : '';
             bGbl.style.background = gblOn ? '#7f1d1d' : '';
+        }
+        if (cBl) {
+            cBl.textContent = cblOn ? '수거 중 (ON)' : '수거';
+            cBl.style.outline = cblOn ? '2px solid #6ee7b7' : '';
+            cBl.style.background = cblOn ? '#064e3b' : '';
         }
         // (추가) 상태 카드/시작 버튼 동기화
         applyMaintToStatusUI();
@@ -843,6 +857,17 @@ function setGlobalMaintenance(on) {
     }
 }
 
+function setCollectionMode(on) {
+    try {
+        sessionStorage.setItem(CBL_FLAG, on ? '1' : '0');
+    } catch {}
+    reflectMaintButtons();
+    broadcastMaintChange();
+    if (on) {
+        window.location.href = '../collection.html';
+    }
+}
+
 document.getElementById('btn-maint-device').addEventListener('click', () => {
     const cur = isDeviceMaintOn();
     setDeviceMaintenance(!cur);
@@ -852,4 +877,8 @@ document.getElementById('btn-maint-global').addEventListener('click', () => {
     setGlobalMaintenance(!cur);
 });
 
+document.getElementById('btn-collection').addEventListener('click', () => {
+    const cur = isCollectionModeOn();
+    setCollectionMode(!cur);
+});
 reflectMaintButtons();
