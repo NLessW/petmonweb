@@ -2232,7 +2232,17 @@ async function connectToFaduino() {
         }
         if (!port) {
             const ports = await navigator.serial.getPorts();
-            port = ports.length ? ports[0] : await navigator.serial.requestPort();
+            const targetVid = 0x067b;
+            const targetPid = 0x23a3;
+            port = ports.find((p) => {
+                const info = p.getInfo();
+                return info.usbVendorId === targetVid && info.usbProductId === targetPid;
+            });
+            if (!port) {
+                port = await navigator.serial.requestPort({
+                    filters: [{ usbVendorId: targetVid, usbProductId: targetPid }],
+                });
+            }
         }
 
         // [CHG] 이미 열린 포트라도 reader/writer 없으면 초기화
