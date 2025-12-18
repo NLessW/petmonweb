@@ -1719,6 +1719,7 @@ async function startProcess() {
                 } else {
                     // [CHG]
                     await waitForDoorClosed({ timeoutMs: 20000 });
+                    takePhotoAndSave();
                 }
             }
             depositCount += 1;
@@ -2182,7 +2183,6 @@ async function runCloseClassifyCollectSequence() {
     renderCloseDoorOriginal('문이 닫힙니다. 손 조심하세요! ⚠️');
     await writeCmd('2');
     const closeResult = await waitForCloseOrHand('Door closed successfully!');
-
     if (closeResult.status === 'hand') {
         // 다시 열기
         await writeCmd('1');
@@ -2932,7 +2932,7 @@ function showBottomArrowAt(px) {
             style.innerHTML = `
                 #bottom-arrow {
                     position: fixed;
-                    bottom: 12px;                   /* lift a bit above the edge */
+                    bottom: 12px;                   
                     pointer-events: none;
                     z-index: 9999;
                     display: block;
@@ -2985,3 +2985,125 @@ function hideBottomArrow() {
         if (el) el.style.display = 'none';
     } catch {}
 }
+
+// ==========================================
+// Webcam & OPFS Logic
+// ==========================================
+let webcamStream = null;
+let videoElement = document.createElement('video');
+videoElement.style.display = 'none';
+videoElement.autoplay = true;
+videoElement.playsInline = true;
+document.body.appendChild(videoElement);
+
+async function initWebcam() {
+    try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoElement.srcObject = webcamStream;
+        console.log('Webcam initialized');
+    } catch (err) {
+        console.error('Webcam initialization failed:', err);
+    }
+}
+
+// Initialize webcam on load
+window.addEventListener('load', initWebcam);
+
+async function savePhotoToOPFS(blob, filename) {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const fileHandle = await root.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        console.log('Saved to OPFS:', filename);
+    } catch (err) {
+        console.error('Failed to save to OPFS:', err);
+    }
+}
+
+async function removePhotoFromOPFS(filename) {
+    try {
+        const root = await navigator.storage.getDirectory();
+        const fileHandle = await root.getFileHandle(filename);
+        await root.removeEntry(filename);
+        console.log('Removed from OPFS:', filename);
+    } catch (err) {
+        console.error('Failed to remove from OPFS:', err);
+    }
+}
+
+async function takePhotoAndSave() {
+    if (!webcamStream) {
+        console.warn('Webcam not available, trying to init...');
+        await initWebcam();
+        if (!webcamStream) return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth || 640;
+    canvas.height = videoElement.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    const dateStr = `${yyyy}${mm}${dd}`;
+    const timeStr = `${hh}${min}${ss}`;
+
+    // Use currentPhoneNumber if available, else default
+    let phone = typeof currentPhoneNumber !== 'undefined' && currentPhoneNumber ? currentPhoneNumber : '00000000000';
+    phone = phone.replace(/[^0-9]/g, '');
+    if (!phone) phone = '00000000000';
+
+    const filename = `${dateStr}${timeStr}_${phone}.png`;
+
+    canvas.toBlob(async (blob) => {
+        if (blob) {
+            await savePhotoToOPFS(blob, filename);
+        }
+    }, 'image/png');
+}
+
+async function downloadAllPhotos() {
+    try {
+        const root = await navigator.storage.getDirectory();
+        let count = 0;
+        for await (const [name, handle] of root.entries()) {
+            if (name.endsWith('.png')) {
+                const file = await handle.getFile();
+                const url = URL.createObjectURL(file);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                count++;
+                // Small delay to prevent browser blocking multiple downloads
+                await new Promise((r) => setTimeout(r, 200));
+                await removePhotoFromOPFS(name);
+            }
+        }
+        if (count === 0) {
+            alert('저장된 사진이 없습니다.');
+        }
+    } catch (err) {
+        console.error('Download failed:', err);
+        alert('다운로드 중 오류가 발생했습니다.');
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        downloadAllPhotos();
+    }
+});
