@@ -1240,6 +1240,7 @@ function showErrorScreen(message) {
     errorAutoTimer = setTimeout(() => {
         showScreen('main-screen');
     }, 10000);
+    takePhotoAndSave('err_');
 }
 
 // ========== 프로세스 실행 ==========
@@ -1647,6 +1648,7 @@ async function startProcess() {
 
         // 기타 예외는 기존대로 에러 화면
         showErrorScreen('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
+        takePhotoAndSave('err_');
         return;
     }
 
@@ -3033,7 +3035,7 @@ async function removePhotoFromOPFS(filename) {
     }
 }
 
-async function takePhotoAndSave() {
+async function takePhotoAndSave(prefix = '') {
     if (!webcamStream) {
         console.warn('Webcam not available, trying to init...');
         await initWebcam();
@@ -3062,7 +3064,7 @@ async function takePhotoAndSave() {
     phone = phone.replace(/[^0-9]/g, '');
     if (!phone) phone = '00000000000';
 
-    const filename = `${dateStr}${timeStr}_${phone}.png`;
+    const filename = `${prefix}${dateStr}${timeStr}_${phone}.png`;
 
     canvas.toBlob(async (blob) => {
         if (blob) {
