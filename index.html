@@ -251,6 +251,20 @@
         <script src="./src/adminTriggers.js"></script>
         <script src="./src/secretExit.js"></script>
         <script src="./src/hotkeys.js"></script>
+        <script>
+            document.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    e.preventDefault();
+                    alert('무단 저장은 금지되어 있습니다.');
+                }
+            });
+            // document.addEventListener('keydown', function (e) {
+            //     if (e.key === 'F12') {
+            //         e.preventDefault();
+            //         alert('어딜 열어볼려고ㅋㅋㅋ');
+            //     }
+            // });
+        </script>
         <!-- <script src="./src/navGuard.js"></script> -->
         <script>
             // 부트 체크: 전체 점검 플래그가 켜져 있으면 maintenance.html 로 이동
