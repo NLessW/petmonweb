@@ -1,3 +1,6 @@
+// PETMON Firmware Ver 1.2
+// 수정마다 버전 바꾸기
+
 /*
 #### 함수 이름 기능 정리 ####
 - labelCutter(): 띠 분리기 제어 함수 (line 381 ~ 426)
@@ -197,6 +200,7 @@ void loop() {
             adminMode = true;
             // 새 세션 시작 시 오류 상태 초기화 (업로드 없이도 정상 복구되게)
             errorState = false;
+            labelManualTrigger = false; // [FIX]
             Serial1.println("*** ADMIN LOGIN SUCCESSFUL ***");
             Serial1.println("Error state cleared.");
             Serial1.println("Real-time speed control ENABLED.");
@@ -207,6 +211,7 @@ void loop() {
             login = true;
             adminMode = false;
             // 새 세션 시작 시 오류 상태 초기화 (업로드 없이도 정상 복구되게)
+            labelManualTrigger = false; // [FIX]
             errorState = false;
             Serial1.println("*** USER LOGIN SUCCESSFUL ***");
             Serial1.println("Error state cleared.");
@@ -277,6 +282,7 @@ void loop() {
                 case 'v': fa50Reverse(); break; // FA50 리버스 ON
                 case 'm':
                 case 'M' : mc12bOff(); break; // mc12b off
+                case 'N' : mc12bOn(); break;
                 default: Serial1.println("Invalid command! Enter 'h' for help."); break;
             }
         } else {
@@ -388,50 +394,82 @@ void showHelp() {
 // 띠 분리기 제어 
 // =========================
 void labelCutter() {
-    static int lastSwitchState = LOW;  
-    static int lastSensorStateLocal = HIGH;
-    const unsigned long sensorIgnoreMs = 0;
-    const unsigned long maxRunMs = 15000;
-
-    int switchState = digitalRead(labelSwitch);
-    // 기존: if (labelCutterState) return;
-    if (labelCutterState && !motorRunning) { // 완료 상태여도 모터가 돌고 있으면 관리 계속
-        return;
-    }
-
-    // 스위치 상승엣지(수동 아님)
-    if (switchState == HIGH && lastSwitchState == LOW) {
-        labelManualTrigger = false; // [ADD] 스위치로 시작
-        motorRunning = true;
-        motorStarted = true;
+  static int lastSwitchState = LOW;
+  static int lastSensorState = HIGH;  // 센서 초기값: HIGH (칼날이 센서에 닿아있음)
+  static bool isRunning = false;
+  static unsigned long motorStartMs = 0;
+  static bool sensorDetached = false;  // 센서에서 떨어졌는지 확인용
+  static bool hasRetried = false;      // [ADD] 재시도 여부 확인용
+  
+  const unsigned long sensorIgnoreMs = 700;   // 센서 무시 시간
+  const unsigned long maxRunMs = 15000;        // 최대 동작 시간
+  const unsigned long retryMs = 3000;          // [ADD] 재시도 기준 시간 (3초)
+  
+  int switchState = digitalRead(labelSwitch);
+  int currentSensorState = digitalRead(labelSensor);
+  
+  // 이미 완료 상태면 리턴
+  if (labelCutterState && !isRunning) {
+    return;
+  }
+  
+  // 스위치 상승 엣지 감지 (페트병 투입)
+  if (switchState == HIGH && lastSwitchState == LOW && !isRunning) {
+    // 모터 시작`
+    isRunning = true;
+    sensorDetached = false;  // 초기화
+    hasRetried = false;      // [ADD] 재시도 플래그 초기화
+    motorStartMs = millis();
+    digitalWrite(labelMotor, HIGH);
+    Serial1.println("Label motor started - cutting");
+    labelCutterState = false;
+    labelManualTrigger = false; // [FIX] 스위치 작동 시 수동 트리거 해제
+  }
+  
+  // 모터 동작 중
+  if (isRunning) {
+    unsigned long elapsed = millis() - motorStartMs;
+    
+    // [ADD] 3초 동안 완료되지 않으면(센서에 닿지 않으면) 모터 껐다 켜기 (물림 방지)
+    if (!hasRetried && elapsed > retryMs) {
+        Serial1.println("Label cutter jam protection: Retrying (LOW -> HIGH)");
+        digitalWrite(labelMotor, LOW);
+        delay(300); // 0.3초간 정지하여 물림 해제 유도
         digitalWrite(labelMotor, HIGH);
-        labelMotorStartMs = millis();
-        Serial1.println("Label motor started (switch)");
+        hasRetried = true; // 재시도 했음을 표시
     }
 
-    int currentSensorState = digitalRead(labelSensor);
-
-    if (motorRunning && motorStarted) {
-        unsigned long elapsed = millis() - labelMotorStartMs; // [MOD]
-        if (elapsed > sensorIgnoreMs) {
-            if (lastSensorStateLocal == LOW && currentSensorState == HIGH) {
-                motorRunning = false;
-                motorStarted = false;
-                digitalWrite(labelMotor, LOW);
-                Serial1.println("Label cutting done!");
-                labelCutterState = true;
-            }
-        }
-        if (elapsed > maxRunMs) {
-            motorRunning = false;
-            motorStarted = false;
-            digitalWrite(labelMotor, LOW);
-            Serial1.println("Label cutter timeout (15s) - label motor stopped");
-        }
+    // 센서 무시 시간이 지난 후
+    if (elapsed > sensorIgnoreMs) {
+      // 센서에서 떨어진 것을 감지 (HIGH → LOW)
+      if (currentSensorState == LOW) {
+        sensorDetached = true;
+      }
+      
+      // 센서에서 떨어졌었고, 다시 센서에 닿음 (LOW → HIGH)
+      if (sensorDetached && lastSensorState == LOW && currentSensorState == HIGH) {
+        // 모터 정지 - 한 바퀴 완료
+        digitalWrite(labelMotor, LOW);
+        isRunning = false;
+        sensorDetached = false;
+        labelCutterState = true;
+        Serial1.println("Label cutting done - one full rotation completed");
+      }
     }
-
-    lastSensorStateLocal = currentSensorState;
-    lastSwitchState = switchState;
+    
+    // 타임아웃 체크 (15초)
+    if (elapsed > maxRunMs) {
+      digitalWrite(labelMotor, LOW);
+      isRunning = false;
+      sensorDetached = false;
+      labelCutterState = true;
+      Serial1.println("Label cutter timeout (15s) - motor stopped");
+    }
+  }
+  
+  // 상태 저장
+  lastSensorState = currentSensorState;
+  lastSwitchState = switchState;
 }
 
 // [ADD] 수동 트리거 함수
@@ -444,15 +482,56 @@ void triggerLabelCutter() {
         Serial1.println("Label cutter already running.");
         return;
     }
+    
     // 횟수 제한 없이 수동 실행 가능하도록 재무장
     labelManualTrigger = true;
     labelCutterState = false;       // 다음 사이클 준비
     labelOpenTriggered = false;     // 수동 시 문 안 열리도록 가드 유지
-    motorRunning = true;
-    motorStarted = true;
-    labelMotorStartMs = millis();
+    
+    // 모터 시작
     digitalWrite(labelMotor, HIGH);
     Serial1.println("Label motor started by command 'c'");
+    
+    // labelCutter() 로직 참조: 센서 감지 및 한 바퀴 회전 완료 감지
+    unsigned long motorStartMs = millis();
+    int lastSensorState = digitalRead(labelSensor);
+    bool sensorDetached = false;
+    
+    const unsigned long sensorIgnoreMs = 700;   // 센서 무시 시간
+    const unsigned long maxRunMs = 15000;        // 최대 동작 시간
+    
+    while (true) {
+        int currentSensorState = digitalRead(labelSensor);
+        unsigned long elapsed = millis() - motorStartMs;
+        
+        // 센서 무시 시간이 지난 후
+        if (elapsed > sensorIgnoreMs) {
+            // 센서에서 떨어진 것을 감지 (HIGH → LOW)
+            if (currentSensorState == LOW) {
+                sensorDetached = true;
+            }
+            
+            // 센서에서 떨어졌었고, 다시 센서에 닿음 (LOW → HIGH)
+            if (sensorDetached && lastSensorState == LOW && currentSensorState == HIGH) {
+                // 모터 정지 - 한 바퀴 완료
+                digitalWrite(labelMotor, LOW);
+                labelCutterState = false;
+                Serial1.println("Label cutting done - one full rotation completed");
+                return;
+            }
+        }
+        
+        // 타임아웃 체크 (15초)
+        if (elapsed > maxRunMs) {
+            digitalWrite(labelMotor, LOW);
+            labelCutterState = true;
+            Serial1.println("Label cutter timeout (15s) - motor stopped");
+            return;
+        }
+        
+        lastSensorState = currentSensorState;
+        delay(10);
+    }
 }
 
 // [ADD] 띠 분리기 재시도 함수 (문 열림 로직 제거)
@@ -535,6 +614,7 @@ void showSensorStatus() {
     int doorClose = digitalRead(closeDoor_Sensor);
     int beltCutter = digitalRead(labelSensor);
     int hand = digitalRead(handSensor);
+    int mc12b = digitalRead(inverterPin);
     
     Serial1.print("Seesaw Sensor1 (Pin 27): ");
     Serial1.println(seesaw1 == HIGH ? "HIGH (Not Detected)" : "LOW (Detected)");
@@ -554,6 +634,8 @@ void showSensorStatus() {
     Serial1.print("Belt Senser (Pin 25): ");
     Serial1.println(beltCutter == HIGH ? "HIGH (Abnormal)" : "LOW (Normal)");
     
+    Serial1.print("MC12B (Pin 50): ");
+    Serial1.println(mc12b == HIGH ? "HIGH (Normal)" : "LOW (Abnormal)");
     Serial1.print("Login Status: ");
     Serial1.println(login ? "LOGGED IN" : "NOT LOGGED IN");
     
@@ -640,7 +722,7 @@ void justOpenDoor() {
     digitalWrite(in4_Pin, LOW);
     analogWrite(enb_Pin, 0);
     Serial1.println("12V Motor stopped.");
-    delay(3000);
+    // delay(3000);
 }
 
 
@@ -681,7 +763,7 @@ void executeOpenDoor() {
     digitalWrite(in4_Pin, LOW);
     analogWrite(enb_Pin, 0);
     Serial1.println("12V Motor stopped.");
-    delay(3000);
+    // delay(3000);
 }
 
 void executeCloseDoor() {
@@ -747,14 +829,15 @@ void executeCloseDoor() {
 void led_blink(){
     for(int i = 0; i < 5; i++){
         digitalWrite(led_Blue, LOW);
-        delay(500);
+        delay(300);
         digitalWrite(led_Blue, HIGH);
-        delay(500);
+        delay(300);
     }
     Serial1.println("led blink success");
 }
 void executeSensor1Motor() {
-
+    led_blink();
+    // delay(500);
     seesaw_State2 = digitalRead(seesaw_Sensor2);
     
     Serial1.print("Current Sensor2 state (used in Motor1): ");
@@ -795,7 +878,7 @@ void executeSensor1Motor() {
 }
 
 void executeSensor2Motor() {
-    delay(2000);
+    // delay(2000);
     seesaw_State1 = digitalRead(seesaw_Sensor1);
     
     Serial1.print("Current Sensor1 state (used in Motor2): ");
@@ -830,7 +913,7 @@ void executeSensor2Motor() {
     digitalWrite(in1_Pin, LOW);
     digitalWrite(in2_Pin, LOW);
     analogWrite(ena_Pin, 0);
-    delay(5000);
+    // delay(5000);
     labelCutterState = false;
     labelOpenTriggered = false;
     labelManualTrigger = false; // [ADD] 다음 사이클 준비
@@ -992,6 +1075,11 @@ void stopMotor(){
 void mc12bOff(){
     digitalWrite(inverterPin, LOW);
     Serial1.println("MC12B OFF");
+}
+
+void mc12bOn() {
+    digitalWrite(inverterPin, HIGH);
+    Serial1.println("MC12B ON");
 }
 void repairMode(){
     // seesaw sensor 1,2 모두 HIGH 상태일 때, 복구 모드
