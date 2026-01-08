@@ -837,17 +837,15 @@ void led_blink(){
 }
 void executeSensor1Motor() {
     led_blink();
-
     // delay(500);
     seesaw_State2 = digitalRead(seesaw_Sensor2);
-    seesaw_State1 = digitalRead(seesaw_Sensor1);
+    
     Serial1.print("Current Sensor2 state (used in Motor1): ");
     Serial1.println(seesaw_State2);
-    // AI zone 하강 시도 후 내려가지지 않을 때 끼임 판정
-    // 끼임 판정 시 사용자에게 안내하기 위함
+    
     if (seesaw_State2 == HIGH) {
         Serial1.println("Sensor2 is HIGH. Starting 24V motor (direction 1)...");
-        unsigned long retryMs = 3000; // 3초 후 재시도
+
         unsigned long startMs = millis();
         while (seesaw_State2 == HIGH) {
             // 시리얼 명령 처리 (속도 변경)
@@ -859,14 +857,8 @@ void executeSensor1Motor() {
             
             seesaw_State2 = digitalRead(seesaw_Sensor2);
             delay(50); // 100ms -> 50ms로 변경
-            
-            if (millis() - startMs > retryMs){
-                Serial1.println("jam the pet bottle");
-
-                Serial1.println("Running Motor2 to unjam...");
-                executeSensor2Motor();
-                
-                // triggerError("Motor1 jammed. Raised seesaw and stopped.");
+            if (millis() - startMs > 15000) {
+                triggerError("Motor1 timeout (15s)");
                 break;
             }
             digitalWrite(led_Blue, HIGH);
@@ -1177,7 +1169,7 @@ void repairMode(){
         
         // 모터 정지
         digitalWrite(in1_Pin, LOW);
-        digitalWrite(in2_Pin, LOW); 
+        digitalWrite(in2_Pin, LOW);
         analogWrite(ena_Pin, 0);
         
         // 복구 성공 시 인버터 3초 더 돌리기

@@ -13,6 +13,7 @@ const mainScreen = document.getElementById('main-screen');
 const processScreen = document.getElementById('process-screen');
 const endScreen = document.getElementById('end-screen');
 const errorScreen = document.getElementById('error-screen');
+const jamScreen = document.getElementById('jam-screen');
 const statusHostMain = document.getElementById('status-host-main');
 const statusHostProcess = document.getElementById('status-host-process');
 const statusSection = document.getElementById('status-section');
@@ -987,7 +988,7 @@ function showScreen(screenId) {
 
         return; // 이후 코드 실행 방지
     }
-
+    // jam-screen은 waitForSensor2WithJamDetection 함수에서 직접 처리됨
     if (screenId === 'end-screen') {
         let countdown = 10;
         const endScreen = document.getElementById('end-screen');
@@ -1257,6 +1258,7 @@ const ICONS = {
     warn: 'https://api.iconify.design/mdi/alert-circle-outline.svg?color=%23ff4d4d&width=90&height=90',
     hand: 'https://api.iconify.design/mdi/hand-back-right.svg?color=%23ff4d4d&width=90&height=90',
     stop: 'https://api.iconify.design/mdi/cog.svg?color=%233772ff&width=90&height=90',
+    jam: 'https://api.iconify.design/mdi/alert-octagon-outline.svg?color=%23ff4d4d&width=90&height=90',
 };
 
 // 단계별 배경색 (선택)
@@ -1561,7 +1563,47 @@ async function handleExitButton() {
                 await new Promise((r) => setTimeout(r, 50));
 
                 if (commands[i].cmd === '3') {
-                    await waitForArduinoResponse('Sensor2 became LOW.');
+                    // jam 발생 시 반복 처리를 위한 루프 (최대 3번 시도)
+                    let jamRetryCount = 0;
+                    const maxJamRetries = 3;
+                    let jamRecoveryLoop = true;
+
+                    while (jamRecoveryLoop) {
+                        try {
+                            await waitForSensor2WithJamDetection({ timeoutMs: 30000 });
+                            jamRecoveryLoop = false; // 정상 완료 시 루프 탈출
+                        } catch (jamErr) {
+                            // jam recovery: 닫기 버튼 누름 -> 문 닫기 -> 3 -> 다시 감지
+                            if (jamErr && jamErr.__jamRecovery) {
+                                jamRetryCount++;
+
+                                if (jamRetryCount > maxJamRetries) {
+                                    // 3번 시도 후에도 실패하면 에러 처리
+                                    showErrorScreen(
+                                        '페트병 끼임이 지속됩니다. 기기에 문제가 있을 수 있습니다. 관리자에게 문의해주세요.'
+                                    );
+                                    return;
+                                }
+
+                                // 1. 문 닫기
+                                renderCloseDoorOriginal('문이 닫힙니다. 손 조심하세요! ⚠️');
+                                await writeCmd('2');
+                                await waitForDoorClosed({ timeoutMs: 20000 });
+
+                                // 2. 자원 판별 (3) - 다시 시도하고 루프 계속 (다시 끼임 감지 가능)
+                                renderProcess(
+                                    'scan',
+                                    `자원을 판별하는 중입니다... (${jamRetryCount}/${maxJamRetries})`,
+                                    2
+                                );
+                                await writeCmd('3');
+                                // 루프 계속하여 waitForSensor2WithJamDetection 다시 호출
+                                continue;
+                            }
+                            throw jamErr;
+                        }
+                    }
+                    await new Promise((r) => setTimeout(r, 1000));
                 } else if (commands[i].cmd === '4') {
                     await waitForArduinoResponse('Sensor1 became LOW.');
                 } else {
@@ -1714,7 +1756,51 @@ async function startProcess() {
                 await new Promise((r) => setTimeout(r, 50));
 
                 if (commands[i].cmd === '3') {
-                    await waitForArduinoResponse('Sensor2 became LOW.');
+                    // jam 발생 시 반복 처리를 위한 루프 (최대 3번 시도)
+                    let jamRetryCount = 0;
+                    const maxJamRetries = 3;
+                    let jamRecoveryLoop = true;
+
+                    while (jamRecoveryLoop) {
+                        try {
+                            await waitForSensor2WithJamDetection({ timeoutMs: 30000 });
+                            jamRecoveryLoop = false; // 정상 완료 시 루프 탈출
+                        } catch (jamErr) {
+                            // jam recovery: 닫기 버튼 누름 -> 문 닫기 -> 3 -> 다시 감지
+                            if (jamErr && jamErr.__jamRecovery) {
+                                jamRetryCount++;
+
+                                if (jamRetryCount > maxJamRetries) {
+                                    // 3번 시도 후에도 실패하면 에러 처리
+                                    try {
+                                        // 안전을 위해 문을 먼저 닫기
+                                        renderCloseDoorOriginal('문을 닫는 중입니다. 손 조심하세요! ⚠️');
+                                        await writeCmd('2');
+                                        await waitForDoorClosed({ timeoutMs: 20000 });
+                                    } catch (closeErr) {
+                                        console.error('에러 처리 중 문 닫기 실패:', closeErr);
+                                    }
+                                    showErrorScreen(
+                                        '페트병 끼임이 지속됩니다. 기기에 문제가 있을 수 있습니다. 관리자에게 문의해주세요.'
+                                    );
+                                    return;
+                                }
+
+                                // 1. 문 닫기
+                                renderCloseDoorOriginal('문이 닫힙니다. 손 조심하세요! ⚠️');
+                                await writeCmd('2');
+                                await waitForDoorClosed({ timeoutMs: 20000 });
+                                takePhotoAndSave();
+
+                                // 2. 자원 판별 (3) - 다시 시도하고 루프 계속 (다시 끼임 감지 가능)
+                                renderProcess('scan', `자원을 판별하는 중입니다... )`, 2);
+                                await writeCmd('3');
+                                // 루프 계속하여 waitForSensor2WithJamDetection 다시 호출
+                                continue;
+                            }
+                            throw jamErr;
+                        }
+                    }
                 } else if (commands[i].cmd === '4') {
                     await waitForArduinoResponse('Sensor1 became LOW.');
                     await new Promise((r) => setTimeout(r, 3000));
@@ -1877,6 +1963,191 @@ function waitForArduinoResponse(targetMessage, { timeoutMs = 10000, silent = fal
                             if (!handleDeviceLost(error)) {
                                 abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
                             }
+                        }
+                        reject(error);
+                    }
+                };
+                loop();
+            })
+    );
+}
+
+// 페트병 끼임 감지용 함수: Sensor2 became LOW를 기다리면서 jam the pet bottle 메시지도 감지
+// jam 감지 시 jam-screen 표시 후 닫기 버튼 누르면 프로세스 재개
+function waitForSensor2WithJamDetection({ timeoutMs = 30000 } = {}) {
+    return withReadLock(
+        () =>
+            new Promise((resolve, reject) => {
+                let timer;
+                let jamHandled = false;
+
+                const scheduleTimeout = (ms) => {
+                    try {
+                        clearTimeout(timer);
+                    } catch {}
+                    timer = setTimeout(() => {
+                        const err = new Error('Motor malfunction timeout');
+                        abortProcessNow(`기기 오류: 모터 오작동(${Math.round(ms / 1000)}초 내 완료 신호 없음)`);
+                        reject(err);
+                    }, ms);
+                };
+                scheduleTimeout(timeoutMs);
+
+                const showJamScreen = () => {
+                    const jamScreenEl = document.getElementById('jam-screen');
+                    if (!jamScreenEl) return;
+
+                    // jam screen 내용 생성
+                    jamScreenEl.innerHTML = `
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%;">
+                            <div style="margin-bottom:24px;">
+                                <img src="${ICONS.jam}" alt="jam" width="120" height="120"/>
+                            </div>
+                            <div style="font-size:2.2rem; font-weight:bold; color:#ff6b6b; margin-bottom:20px; text-align:center; line-height:1.5;">
+                                페트병이 끼였습니다!<br>
+                                페트병을 더 깊게 넣어주세요.<br>
+                                페트병이 이미 깊숙하게 들어가있을 경우<br>
+                                기기 문제이므로 페트병을 빼신 후 메인으로 버튼을 눌러주세요.<br>
+                                이 버튼을 누르실 경우 기기는 준비중으로 전환됩니다.
+                            </div>
+                            <div style="font-size:1.4rem; color:#dbe6ff; margin-bottom:32px; text-align:center;">
+                                페트병을 넣은 후 아래 닫기 버튼을 눌러주세요.
+                            </div>
+                            <button id="jam-close-button" style="font-size:1.5rem; padding:16px 48px; background:#3772ff; color:#fff; border:none; border-radius:10px; cursor:pointer;">
+                                닫기
+                            </button>
+                            <button id="motor-error-button" style="font-size: 1.5rem; padding:16px 48px; background:#ff4d4d; color:#fff; border:none; border-radius:10px; cursor:pointer; margin-top:16px;">
+                                메인으로(기기 장애)
+                            </button>
+                        </div>
+                    `;
+
+                    // 화면 전환
+                    document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
+                    jamScreenEl.style.display = 'flex';
+
+                    // 닫기 버튼 클릭 핸들러
+                    const jamCloseBtn = document.getElementById('jam-close-button');
+                    if (jamCloseBtn) {
+                        jamCloseBtn.onclick = async () => {
+                            // process-screen으로 복귀
+                            document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
+                            document.getElementById('process-screen').style.display = 'flex';
+
+                            // 현재 withReadLock을 해제하기 위해 reject로 탈출
+                            // 그 후 별도로 프로세스 재개
+                            try {
+                                clearTimeout(timer);
+                            } catch {}
+
+                            // 특별한 에러로 reject하여 lock 해제
+                            reject({ __jamRecovery: true });
+                        };
+                    }
+                    const motorErrorBtn = document.getElementById('motor-error-button');
+                    if (motorErrorBtn) {
+                        motorErrorBtn.onclick = async () => {
+                            document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
+                            document.getElementById('main-screen').style.display = 'flex';
+
+                            try {
+                                clearTimeout(timer);
+                            } catch {}
+                            reject({ __jamRecovery: false });
+                        };
+                    }
+                };
+                // 끼임 감지 시 문 열기 명령 전송
+                const sendOpenDoorForJam = async () => {
+                    try {
+                        await writeCmd('o'); // 문 열기 (인버터 작동 미포함)
+                    } catch (err) {
+                        console.error('끼임 시 문 열기 명령 전송 실패:', err);
+                    }
+                };
+
+                const stepCheckBuffer = () => {
+                    const normAll = normalizeText(__rxBuf);
+
+                    // 손 감지 시 타임아웃 연장
+                    if (normAll.includes('hand detected')) scheduleTimeout(30000);
+
+                    // 에러 감지
+                    if (normAll.includes('error:')) {
+                        try {
+                            clearTimeout(timer);
+                        } catch {}
+                        const msg = (__rxBuf.split(/\r?\n/).find((l) => /error:/i.test(l)) || '').replace(
+                            /.*error:\s*/i,
+                            ''
+                        );
+                        abortProcessNow(`기기 오류: ${msg || '알 수 없는 오류'}`);
+                        reject(new Error(msg || 'Arduino reported ERROR'));
+                        return true;
+                    }
+
+                    // 페트병 끼임 감지
+                    if (normAll.includes('jam the pet bottle') && !jamHandled) {
+                        jamHandled = true; // 끼임 처리 플래그 설정 (중복 처리 방지)
+
+                        // 버퍼에서 jam 메시지 제거 (원본 버퍼에서 정확한 위치 찾기)
+                        const lowerBuf = __rxBuf.toLowerCase();
+                        const idx = lowerBuf.indexOf('jam the pet bottle');
+                        if (idx !== -1) {
+                            __rxBuf = __rxBuf.slice(idx + 'jam the pet bottle'.length);
+                        }
+
+                        // 타임아웃 정지 (사용자 입력 대기)
+                        try {
+                            clearTimeout(timer);
+                        } catch {}
+
+                        // 문 열기 명령 전송 (페트병을 더 깊게 넣을 수 있도록)
+                        sendOpenDoorForJam();
+
+                        // jam 화면 표시
+                        showJamScreen();
+                        return true; // 루프 중단 (jam 화면에서 재개)
+                    }
+
+                    // 정상 완료 감지
+                    if (normAll.includes('sensor2 became low')) {
+                        const idx = normAll.indexOf('sensor2 became low');
+                        __rxBuf = __rxBuf.slice(idx + 'sensor2 became low'.length);
+                        try {
+                            clearTimeout(timer);
+                        } catch {}
+                        resolve();
+                        return true;
+                    }
+
+                    return false;
+                };
+
+                const loop = async () => {
+                    try {
+                        if (stepCheckBuffer()) return;
+
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            try {
+                                clearTimeout(timer);
+                            } catch {}
+                            reject(new Error('Reader stream closed unexpectedly.'));
+                            return;
+                        }
+                        if (value) {
+                            __rxBuf += value;
+                            if (normalizeText(__rxBuf).includes('hand detected')) scheduleTimeout(30000);
+                        }
+                        loop();
+                    } catch (error) {
+                        try {
+                            clearTimeout(timer);
+                        } catch {}
+                        console.error('Error in waitForSensor2WithJamDetection loop:', error);
+                        if (!handleDeviceLost(error)) {
+                            abortProcessNow('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
                         }
                         reject(error);
                     }
@@ -2329,9 +2600,14 @@ async function connectToFaduino() {
 
 // ========== 이벤트 ==========
 loginButton.addEventListener('click', () => {
+    phoneNumberInput.value = '';
     if (window.__hardLock) return; // [GUARD]
     loginPopup.style.display = 'flex';
     connectToFaduino();
+    // loginPopup 표시 후 1분동안 입력 없을 시 자동 닫기
+    setTimeout(() => {
+        loginPopup.style.display = 'none';
+    }, 1000 * 60);
 });
 
 loginSubmit.addEventListener('click', async () => {

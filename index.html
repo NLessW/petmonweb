@@ -139,6 +139,13 @@
             </div>
         </div>
 
+        <!-- 페트병 끼임 화면 -->
+        <div id="jam-screen" class="screen">
+            <div class="end-box">
+                <!-- 내용은 index.js에서 동적으로 생성됨 -->
+            </div>
+        </div>
+
         <!-- 오류 화면 -->
         <div id="error-screen" class="screen">
             <div class="end-box">
@@ -165,6 +172,9 @@
             <div class="popup-content">
                 <h2>전화번호를 입력하세요</h2>
                 <input type="tel" id="phone-number" maxlength="13" placeholder="010-1234-5678" />
+                <p class="pin-desc" style="margin-top: 6px; font-size: 0.9em; color: #888">
+                    1분간 미입력 시 자동으로 창이 닫힙니다.
+                </p>
                 <div class="keypad">
                     <button>1</button>
                     <button>2</button>
