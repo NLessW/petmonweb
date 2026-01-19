@@ -3030,7 +3030,10 @@ if (typeof window !== 'undefined') {
                 if (writer && isConnected) {
                     // 띠 분리기를 완전히 건너뛰고 바로 투입구 열기 명령 전송
                     console.log('띠 분리기 스킵: 바로 투입구 열기 명령 전송');
-                    await writeCmdWithAck('DOOR_OPEN'); // 투입구 열기
+                    // [MOD] Main Loop가 Read Lock을 잡고 있을 때(띠 분리기 대기 등),
+                    // writeCmdWithAck를 쓰면 ACK가 Main Loop에 의해 삼켜질 수 있어 타임아웃 발생함.
+                    // 따라서 ACK 체크 없이 명령만 보내고, Main Loop가 'Door opened'를 받아 진행하게 함.
+                    await writeCmd('DOOR_OPEN');
                     console.log('투입구 열기 명령 전송 완료');
                 } else {
                     console.warn('시리얼 연결이 없어서 띠 분리기 스킵 불가');
