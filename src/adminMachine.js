@@ -256,7 +256,7 @@ async function connect() {
             const info = selectedPort.getInfo();
             appendLog(
                 `포트 1개 발견 - 자동 선택: VID=${info.usbVendorId || 'N/A'} PID=${info.usbProductId || 'N/A'}`,
-                'info'
+                'info',
             );
         } else {
             // 여러 포트가 있으면 선택 UI 표시
@@ -449,8 +449,8 @@ async function gracefulDisconnect(goHome = false) {
 }
 // 버튼 이벤트
 document.getElementById('btn-connect').onclick = connect;
-document.getElementById('btn-login').onclick = () => send('LOGIN_USER');
-document.getElementById('btn-99login').onclick = () => send('LOGIN_ADMIN');
+document.getElementById('btn-login').onclick = () => send('LOGIN_ADMIN');
+document.getElementById('btn-99login').onclick = () => send('LOGIN_USER');
 document.getElementById('btn-help').onclick = () => send('HELP');
 document.getElementById('btn-query').onclick = () => send('GET_SPEEDS');
 document.getElementById('btn-repair').onclick = () => send('REPAIR');
@@ -546,7 +546,7 @@ document.getElementById('btn-ai-test').onclick = () => {
                 .join('');
 
             body.innerHTML = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;color:#cbd5e1"><div style="font-weight:700">요약:</div><div style="display:flex;">${aggHtml}</div></div>${parts.join(
-                ''
+                '',
             )}`;
         } catch (e) {
             appendLog('AI 테스트 오류: ' + (e && e.message ? e.message : String(e)), 'err');
@@ -633,7 +633,7 @@ manualButtons.forEach(
             if (/D24/.test(base)) spd = ':' + document.getElementById('m24-speed').value;
             else if (/D12/.test(base) && !/S$/.test(base)) spd = ':' + document.getElementById('m12-speed').value;
             send(base + spd);
-        })
+        }),
 );
 
 // 길게 누르면 연속 증가/감소 ----------------------------------
@@ -685,7 +685,8 @@ function scheduleAdaptiveInterval() {
     // 경과 시간에 따라 interval 속도 변경 (가속)
     const elapsed = performance.now() - holdStartedAt;
     let period = 120; // 기본 120ms
-    if (elapsed > 2500) period = 40; // 2.5초 이후 매우 빠르게
+    if (elapsed > 2500)
+        period = 40; // 2.5초 이후 매우 빠르게
     else if (elapsed > 1200) period = 70; // 1.2초 이후 빠르게
     if (holdInterval) clearInterval(holdInterval);
     holdInterval = setInterval(() => {
@@ -719,7 +720,7 @@ document.addEventListener(
         if (!isStepButton(btn)) return;
         startHold(btn);
     },
-    { passive: true }
+    { passive: true },
 );
 
 function endHold(e) {
@@ -776,7 +777,7 @@ function broadcastMaintChange() {
                     global: sessionStorage.getItem(GBL_FLAG) === '1',
                     collection: sessionStorage.getItem(CBL_FLAG) === '1',
                 },
-            })
+            }),
         );
     } catch {}
 }
