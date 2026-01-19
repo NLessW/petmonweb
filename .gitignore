@@ -54,5 +54,4 @@ node_modules
 
 # source
 # originalPetmon
-originalPetmon/*
-petmon/*
+petmon*
