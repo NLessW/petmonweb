@@ -1806,8 +1806,15 @@ async function startProcess() {
                     // ai_zone_back 후 3초 대기
                     await new Promise((r) => setTimeout(r, 3000));
                 } else if (commands[i].cmd === 'AI_ZONE_FWD') {
-                    // 수집 타임아웃 10초 -> 30초로 증가 (간헐적 에러 방지)
-                    await waitForArduinoResponse('Sensor1 reached (LOW).', { timeoutMs: 30000 });
+                    // 수집 타임아웃 30초 + 1회 재시도 로직 추가
+                    try {
+                        await waitForArduinoResponse('Sensor1 reached (LOW).', { timeoutMs: 30000 });
+                    } catch (fwdErr) {
+                        console.warn('AI_ZONE_FWD 1차 실패, 재시도 수행:', fwdErr);
+                        // 재시도: 명령 재전송 후 대기
+                        await writeCmdWithAck('AI_ZONE_FWD');
+                        await waitForArduinoResponse('Sensor1 reached (LOW).', { timeoutMs: 30000 });
+                    }
                     await new Promise((r) => setTimeout(r, 3000));
                 } else {
                     await waitForDoorClosed({ timeoutMs: 20000 });
