@@ -10,7 +10,7 @@
  * accordance with the terms of the license agreement you entered into with [ReHAN Co. LTD.].
   -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
     <head>
         <meta charset="UTF-8" />
@@ -31,27 +31,34 @@
         }
         .wrap button {
             position: absolute;
-            bottom: 160px;
-            left: 50%;
+            right: 51.6%;
+            top: 35%;
             transform: translateX(-50%);
         }
         img {
-            width: 100%;
+            width: 1920px;
             height: 100%;
         }
     </style>
     <body>
         <div class="wrap">
             <img src="img/수거공지.png" alt="페트병 수거 공지" />
-            <div class="admin-area">
-                <button
-                    id="btn-admin-enter"
-                    class="admin-btn"
-                    style="background-color: #03aaa1; color: white; font-family: 'Isamanru'; text-align: center"
-                >
-                    수거 완료
-                </button>
-            </div>
+
+            <button
+                id="btn-admin-enter"
+                class="admin-btn"
+                style="
+                    background-color: transparent;
+                    color: white;
+                    font-family: 'Isamanru';
+                    text-align: center;
+                    justify-content: center;
+
+                    width: 300px;
+                    height: 300px;
+                    cursor: default;
+                "
+            ></button>
         </div>
         <div id="admin-pin-popup" class="pin-modal" style="display: none">
             <div class="pin-content" role="dialog" aria-modal="true" aria-labelledby="pin-title">

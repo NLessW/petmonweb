@@ -10,7 +10,7 @@
  * accordance with the terms of the license agreement you entered into with [ReHAN Co. LTD.].
   -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
     <head>
         <meta charset="UTF-8" />
@@ -22,7 +22,12 @@
                 margin: 0;
                 background: #0b1220;
                 color: #e5e7eb;
-                font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    Segoe UI,
+                    Roboto,
+                    sans-serif;
             }
             .wrap {
                 min-height: 100vh;
@@ -79,11 +84,38 @@
         <div class="wrap">
             <div class="panel">
                 <h1>현재 전체 점검 중입니다</h1>
-                <p>일시적으로 사용이 제한되어 있습니다. 잠시 후 다시 이용해 주세요.</p>
+                <p>정상 운영 및 점검 여부는 하단 QR코드를 이용해주세요.</p>
                 <div class="admin-area">
                     <div>관리자 전용</div>
                     <button id="btn-admin-enter" class="admin-btn">관리자 해제/설정 이동</button>
                     <div class="hint">버튼 클릭 후 비밀번호를 입력하면 관리자 페이지로 이동합니다.</div>
+                </div>
+                <!-- QR 코드 및 안내사항. 한줄로 출력-->
+                <div
+                    style="
+                        margin-top: 24px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #fff;
+                        font-size: 0.95rem;
+                    "
+                >
+                    <img
+                        src="img/petmon_QR.png"
+                        alt="고객 지원 QR 코드"
+                        style="width: 120px; height: 120px; margin-right: 24px; flex-shrink: 0; object-fit: contain"
+                    />
+
+                    <div style="text-align: left; line-height: 1.6; font-weight: bold">
+                        <span style="display: block; margin-bottom: 2px">■ 포인트 조회</span>
+                        <span style="display: block; margin-bottom: 2px">■ 공지사항 확인</span>
+                        <span>■ 주변 기기 위치 및 상태 확인</span>
+
+                        <div style="font-weight: normal; color: #fff; margin-top: 4px">
+                            (정상 운영 및 점검 여부 확인 가능)
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

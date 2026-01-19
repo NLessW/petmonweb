@@ -358,7 +358,7 @@ async function readLoop() {
 }
 function handleAutoLoginDetect(text) {
     const lower = text.toLowerCase();
-    if (!loggedIn && lower.includes('login suc') && lower.includes('success')) {
+    if (!loggedIn && lower.includes('ack:login_user')) {
         setLoggedIn(true);
     }
     if (loggedIn && lower.includes('logged out')) {
@@ -449,12 +449,12 @@ async function gracefulDisconnect(goHome = false) {
 }
 // 버튼 이벤트
 document.getElementById('btn-connect').onclick = connect;
-document.getElementById('btn-login').onclick = () => send('98');
-document.getElementById('btn-99login').onclick = () => send('99');
-document.getElementById('btn-help').onclick = () => send('h');
-document.getElementById('btn-query').onclick = () => send('Q');
-document.getElementById('btn-repair').onclick = () => send('R');
-document.getElementById('btn-logout').onclick = () => send('L');
+document.getElementById('btn-login').onclick = () => send('LOGIN_USER');
+document.getElementById('btn-99login').onclick = () => send('LOGIN_ADMIN');
+document.getElementById('btn-help').onclick = () => send('HELP');
+document.getElementById('btn-query').onclick = () => send('GET_SPEEDS');
+document.getElementById('btn-repair').onclick = () => send('REPAIR');
+document.getElementById('btn-logout').onclick = () => send('LOGOUT');
 document.getElementById('btn-go-main').onclick = async (e) => {
     e.target.disabled = true;
     await gracefulDisconnect(true);
@@ -560,7 +560,7 @@ document.getElementById('btn-ai-test').onclick = () => {
 buttonsQuick.forEach((b) => (b.onclick = () => send(b.dataset.cmd)));
 
 // 속도 적용
-document.getElementById('btn-refresh-speed').onclick = () => send('Q');
+document.getElementById('btn-refresh-speed').onclick = () => send('GET_SPEEDS');
 
 function sendCurrentSpeeds(initial = false) {
     if (!writer || !loggedIn) return;

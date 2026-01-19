@@ -12,6 +12,27 @@
  * You shall not disclose such Confidential Information and shall use it only in
  * accordance with the terms of the license agreement you entered into with [ReHAN Co. LTD.].
  */
+// PETMON Firmware Ver 1.2
+// 수정마다 버전 바꾸기
+
+/*
+#### 함수 이름 기능 정리 ####
+- labelCutter(): 띠 분리기 제어 함수 (line 381 ~ 426)
+- triggerLabelCutter() : 수동으로 띠 분리기 작동 트리거 함수 (line 429 ~ 447)
+- showSensorStatus(): 현재 센서 상태를 시리얼로 출력 (line 449 ~ 481)
+- runAutoSequence() : 전체 자동 시퀀스 실행 함수 (line 483 ~ 528)
+- justOpenDoor() : 문 열기 함수 (인버터 작동 미포함) (line 530 ~ 564)
+- executeOpenDoor() : 문 열기 함수 (인버터 작동 포함) (line 567 ~ 605)
+- executeCloseDoor() : 문 닫기 함수 (line 607 ~ 666)
+- led_blink() : LED 제어 함수 (line 667 ~ 675)
+- executeSensor1Motor() : 센서1 기반 24V 모터 제어 함수 (시소 뒤로 넘기기) (line 676 ~ 714)
+- executeSensor2Motor() : 센서2 기반 24V 모터 제어 함수 (시소 앞으로 올리기) (line 716 ~ 759)
+- checkSerialForSpeedUpdate() : 모터 구동 중 시리얼 명령으로 속도 업데이트 확인 함수 (line 762 ~ 791)
+- parseAndSetSpeeds(String cmd) : 시리얼 명령으로 모터 속도 파싱 및 설정 함수 (line 793 ~ 861);
+- stopMotor() : 모든 모터 및 인버터 정지 함수 (line 862 ~ 886)
+- repairMode() : 수리 모드 진입 함수 (line 888 ~ 1004)
+#### 기능 수정 시 해당 코드 찾아가기 #####
+*/
 
 #include <Arduino.h>
 #include <EEPROM.h>
@@ -62,7 +83,7 @@ int in4_Pin = 10;
 int in3_Pin = 9;
 
 // Inverter PIN
-int inverterPin = 50;
+int inverterPin = 51;
 int fwdPin = 40;
 int reversePin = 39;
 
