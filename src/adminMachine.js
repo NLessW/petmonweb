@@ -358,7 +358,7 @@ async function readLoop() {
 }
 function handleAutoLoginDetect(text) {
     const lower = text.toLowerCase();
-    if (!loggedIn && lower.includes('ack:login_user')) {
+    if (!loggedIn && (lower.includes('ack:login_user') || lower.includes('ack:login_admin'))) {
         setLoggedIn(true);
     }
     if (loggedIn && lower.includes('logged out')) {
@@ -568,7 +568,7 @@ function sendCurrentSpeeds(initial = false) {
     const dcV = document.getElementById('speed-dc').value;
     const d1V = document.getElementById('speed-d1').value;
     const d2V = document.getElementById('speed-d2').value;
-    const cmd = `SPD:DO=${doV};DC=${dcV};D1=${d1V};D2=${d2V}`;
+    const cmd = `SET_SPEEDS:DO=${doV};DC=${dcV};D1=${d1V};D2=${d2V}`;
     send(cmd + (initial ? '  // sync' : ''));
     const msg = document.getElementById('auto-speed-msg');
     if (msg) {
