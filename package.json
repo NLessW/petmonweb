@@ -1,0 +1,9 @@
+{
+    "dependencies": {
+        "firebase": "^10.1.0"
+    },
+    "devDependencies": {
+        "electron": "^38.3.0",
+        "electron-builder": "^26.0.12"
+    }
+}
