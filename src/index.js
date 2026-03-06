@@ -2522,7 +2522,7 @@ async function runCloseClassifyCollectSequence() {
     await waitForArduinoResponse('Sensor1 reached (LOW).');
     await new Promise((r) => setTimeout(r, 3000));
 }
-c;
+
 // ========== Fa-duino 연결 ==========
 let __serialReadBusy = false;
 async function withReadLock(task) {
