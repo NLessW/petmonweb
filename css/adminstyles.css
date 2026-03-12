@@ -26,9 +26,144 @@ header {
     align-items: center;
 }
 main {
-    max-width: 1100px;
+    max-width: 1500px;
     margin: 0 auto;
     padding: 32px 24px 80px;
+}
+
+/* ========== 2컬럼 레이아웃 ========== */
+.admin-layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+.admin-controls {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* ========== 센서 패널 ========== */
+.sensor-panel {
+    flex: 0 0 300px;
+    width: 300px;
+    background: #1d2330;
+    border: 1px solid #2d3748;
+    border-radius: 12px;
+    overflow: hidden;
+    position: sticky;
+    top: 16px;
+}
+.sensor-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #253041;
+    border-bottom: 1px solid #2d3748;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.sensor-panel-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+.sensor-placeholder {
+    padding: 32px 20px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+.sensor-list {
+    padding: 8px 0 12px;
+}
+.sensor-group-title {
+    padding: 10px 16px 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.sensor-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 16px;
+    border-radius: 0;
+    transition: background 0.15s;
+}
+.sensor-row:hover {
+    background: #253041;
+}
+.sensor-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #2d3748;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+    transition:
+        background 0.2s,
+        box-shadow 0.2s;
+}
+.sensor-dot.active {
+    background: #3772ff;
+    box-shadow: 0 0 6px rgba(55, 114, 255, 0.6);
+}
+.sensor-dot.ok {
+    background: #18c964;
+    box-shadow: 0 0 6px rgba(24, 201, 100, 0.5);
+}
+.sensor-dot.warn {
+    background: #f5a623;
+    box-shadow: 0 0 6px rgba(245, 166, 35, 0.5);
+}
+.sensor-dot.danger {
+    background: #ff4d4d;
+    box-shadow: 0 0 6px rgba(255, 77, 77, 0.5);
+}
+.sensor-dot.idle {
+    background: #2d3748;
+}
+.sensor-label {
+    flex: 1;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+}
+.sensor-value {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-align: right;
+    min-width: 70px;
+}
+.sensor-value.active {
+    color: #60a5fa;
+}
+.sensor-value.ok {
+    color: #34d399;
+}
+.sensor-value.warn {
+    color: #fbbf24;
+}
+.sensor-value.danger {
+    color: #f87171;
+}
+.sensor-value.idle {
+    color: #475569;
+}
+
+@media (max-width: 900px) {
+    .admin-layout {
+        flex-direction: column;
+    }
+    .sensor-panel {
+        flex: unset;
+        width: 100%;
+        position: static;
+    }
 }
 section {
     background: #1d2330;

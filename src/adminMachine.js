@@ -17,6 +17,7 @@ let port,
     serialBuffer = '';
 let loggedIn = false;
 let speedDebounce;
+let inSensorBlock = false; // 센서 상태 블록 수신 중 여부 (로그 필터링)
 const logEl = document.getElementById('log');
 const connDot = document.getElementById('conn-dot');
 const connText = document.getElementById('conn-text');
@@ -283,6 +284,11 @@ async function connect() {
         keepReading = true;
         readLoop();
         appendLog('✓ 포트 연결 성공', 'info');
+        // 연결 직후 센서 상태 자동 갱신
+        setTimeout(() => {
+            send('GET_STATUS');
+            startSensorPolling();
+        }, 800);
     } catch (e) {
         if (e.name === 'NotFoundError' || e.message.includes('No port selected')) {
             appendLog('포트 선택이 취소되었습니다. 다시 시도해주세요.', 'err');
@@ -310,7 +316,16 @@ async function readLoop() {
                     const line = serialBuffer.slice(0, idx).trim();
                     serialBuffer = serialBuffer.slice(serialBuffer.slice(idx).match(/^[\r\n]+/)[0].length + idx);
                     if (line) {
-                        appendLog(line, 'rx');
+                        // 센서 상태 블록 경계 감지
+                        if (line.includes('=== Current Sensor Status ===')) {
+                            inSensorBlock = true;
+                        } else if (line.includes('=============================')) {
+                            inSensorBlock = false;
+                        }
+                        // 센서 블록 안의 라인은 로그에서 생략 (패널에서 확인)
+                        if (!inSensorBlock && !line.includes('=== Current Sensor Status ===')) {
+                            appendLog(line, 'rx');
+                        }
                         handleAutoLoginDetect(line);
                     }
                 }
@@ -369,6 +384,15 @@ function handleAutoLoginDetect(text) {
     if (text.startsWith('SPEEDS:')) {
         parseSpeedsFromDevice(text);
     }
+
+    // 센서 상태 블록 처리
+    if (text.includes('=== Current Sensor Status ===')) {
+        showSensorList();
+    } else if (text.includes('=============================')) {
+        updateSensorTimestamp();
+    } else {
+        handleSensorLine(text);
+    }
 }
 
 function parseSpeedsFromDevice(line) {
@@ -414,6 +438,11 @@ async function send(cmd) {
     await writer.write(cmd + '\r\n');
     appendLog(cmd, 'tx');
 }
+// 로그 없이 전송 (센서 폴링 등 내부용)
+async function sendQuiet(cmd) {
+    if (!writer) return;
+    await writer.write(cmd + '\r\n');
+}
 async function gracefulDisconnect(goHome = false) {
     try {
         // 최신 속도 1회 더 전송 (이미 동일값이면 EEPROM 미작성)
@@ -442,6 +471,8 @@ async function gracefulDisconnect(goHome = false) {
     } catch (e) {}
     setConnected(false);
     setLoggedIn(false);
+    stopSensorPolling();
+    resetSensorPanel();
     if (goHome) {
         appendLog('메인 페이지로 이동');
         window.location.href = '../index.html';
@@ -751,6 +782,143 @@ function loadSpeedsFromLocalStorage() {
 
 // 페이지 로드 시 실행
 loadSpeedsFromLocalStorage();
+
+// ================= 센서 상태 패널 =================
+let sensorPollTimer = null;
+
+// 센서 ID 매핑 테이블
+const SENSOR_MAP = [
+    {
+        pattern: /AI_ZONE Sensor1/i,
+        id: 'ai1',
+        state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
+        label: (v) => (v.includes('(Detected)') ? '감지됨' : '미감지'),
+    },
+    {
+        pattern: /AI_ZONE Sensor2/i,
+        id: 'ai2',
+        state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
+        label: (v) => (v.includes('(Detected)') ? '감지됨' : '미감지'),
+    },
+    {
+        pattern: /AI_ZONE Sensor3/i,
+        id: 'ai3',
+        state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
+        label: (v) => (v.includes('(Detected)') ? '감지됨' : '미감지'),
+    },
+    {
+        pattern: /Door Open Sensor/i,
+        id: 'door-open',
+        state: (v) => (v.includes('Door Open') ? 'ok' : 'idle'),
+        label: (v) => (v.includes('Door Open') ? '열림' : '닫힘'),
+    },
+    {
+        pattern: /Door Close Sensor/i,
+        id: 'door-close',
+        state: (v) => (v.includes('Door Closed') ? 'ok' : 'idle'),
+        label: (v) => (v.includes('Door Closed') ? '닫힘' : '열림'),
+    },
+    {
+        pattern: /Hand Sensor/i,
+        id: 'hand',
+        state: (v) => (v.includes('Hand Detected') ? 'danger' : 'ok'),
+        label: (v) => (v.includes('Hand Detected') ? '⚠ 손 감지' : '없음'),
+    },
+    {
+        // 펌웨어 오타 "Senser" 도 대응
+        pattern: /Belt Sen[s]er/i,
+        id: 'belt',
+        state: (v) => (v.includes('Abnormal') ? 'warn' : 'ok'),
+        label: (v) => (v.includes('Abnormal') ? '이상' : '정상'),
+    },
+    {
+        pattern: /Photo Sensor/i,
+        id: 'photo',
+        state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
+        label: (v) => (v.includes('(Detected)') ? '감지됨' : 'CLEAR'),
+    },
+    {
+        pattern: /Login Status/i,
+        id: 'login',
+        state: (v) => (v.includes('LOGGED IN') ? 'ok' : 'warn'),
+        label: (v) => (v.includes('LOGGED IN') ? '로그인됨' : '로그아웃'),
+    },
+];
+
+function handleSensorLine(line) {
+    for (const entry of SENSOR_MAP) {
+        if (entry.pattern.test(line)) {
+            const colonIdx = line.indexOf(':');
+            if (colonIdx === -1) return;
+            const rawVal = line.slice(colonIdx + 1).trim();
+            const st = entry.state(rawVal);
+            const lbl = entry.label(rawVal);
+            const dot = document.getElementById('sd-' + entry.id);
+            const val = document.getElementById('sv-' + entry.id);
+            if (dot) dot.className = 'sensor-dot ' + st;
+            if (val) {
+                val.textContent = lbl;
+                val.className = 'sensor-value ' + st;
+            }
+            return;
+        }
+    }
+}
+
+function showSensorList() {
+    const placeholder = document.getElementById('sensor-placeholder');
+    const list = document.getElementById('sensor-list');
+    const refreshBtn = document.getElementById('btn-sensor-refresh');
+    if (placeholder) placeholder.style.display = 'none';
+    if (list) list.style.display = '';
+    if (refreshBtn) refreshBtn.disabled = false;
+}
+
+function resetSensorPanel() {
+    const placeholder = document.getElementById('sensor-placeholder');
+    const list = document.getElementById('sensor-list');
+    const refreshBtn = document.getElementById('btn-sensor-refresh');
+    const lastUpdate = document.getElementById('sensor-last-update');
+    if (placeholder) {
+        placeholder.style.display = '';
+        placeholder.textContent = '연결이 끊겼습니다.';
+    }
+    if (list) list.style.display = 'none';
+    if (refreshBtn) refreshBtn.disabled = true;
+    if (lastUpdate) lastUpdate.textContent = '연결 없음';
+    SENSOR_MAP.forEach((e) => {
+        const dot = document.getElementById('sd-' + e.id);
+        const val = document.getElementById('sv-' + e.id);
+        if (dot) dot.className = 'sensor-dot idle';
+        if (val) {
+            val.textContent = '-';
+            val.className = 'sensor-value idle';
+        }
+    });
+}
+
+function updateSensorTimestamp() {
+    const el = document.getElementById('sensor-last-update');
+    if (el) el.textContent = '갱신: ' + new Date().toLocaleTimeString();
+}
+
+function startSensorPolling() {
+    stopSensorPolling();
+    sensorPollTimer = setInterval(() => {
+        if (writer) sendQuiet('GET_STATUS');
+    }, 2000);
+}
+
+function stopSensorPolling() {
+    if (sensorPollTimer) {
+        clearInterval(sensorPollTimer);
+        sensorPollTimer = null;
+    }
+}
+
+document.getElementById('btn-sensor-refresh').addEventListener('click', () => {
+    if (writer) send('GET_STATUS');
+});
 
 // 시리얼 미지원 안내
 if (!('serial' in navigator)) {

@@ -29,157 +29,267 @@
             </div>
         </header>
         <main>
-            <section>
-                <h2 style="margin-top: 0">장비 연결</h2>
-                <div class="inline">
-                    <button id="btn-connect">장비 연결</button>
-                    <button id="btn-login" disabled>속도제어 로그인</button>
-                    <button id="btn-99login" disabled>일반 로그인</button>
-                    <button id="btn-query" disabled>속도 조회</button>
-                    <button id="btn-help" disabled>도움말</button>
-                    <button id="btn-repair" disabled>자가 수리</button>
-                    <button id="btn-ai-test" disabled>AI 테스트</button>
-                    <button id="btn-logout" class="secondary" disabled>로그아웃</button>
-                    <button id="btn-go-main" class="secondary" style="background: #444" title="속도 저장 후 메인으로">
-                        메인으로
-                    </button>
-                </div>
-                <div style="margin-top: 16px" class="small" id="info-line">시리얼 장비 연결 후 로그인하세요.</div>
-            </section>
+            <div class="admin-layout">
+                <div class="admin-controls">
+                    <section>
+                        <h2 style="margin-top: 0">장비 연결</h2>
+                        <div class="inline">
+                            <button id="btn-connect">장비 연결</button>
+                            <button id="btn-login" disabled>속도제어 로그인</button>
+                            <button id="btn-99login" disabled>일반 로그인</button>
+                            <button id="btn-query" disabled>속도 조회</button>
+                            <button id="btn-help" disabled>도움말</button>
+                            <button id="btn-repair" disabled>자가 수리</button>
+                            <button id="btn-ai-test" disabled>AI 테스트</button>
+                            <button id="btn-logout" class="secondary" disabled>로그아웃</button>
+                            <button
+                                id="btn-go-main"
+                                class="secondary"
+                                style="background: #444"
+                                title="속도 저장 후 메인으로"
+                            >
+                                메인으로
+                            </button>
+                        </div>
+                        <div style="margin-top: 16px" class="small" id="info-line">
+                            시리얼 장비 연결 후 로그인하세요.
+                        </div>
+                    </section>
 
-            <section>
-                <h2 style="margin-top: 0">모터 속도 설정</h2>
-                <form id="speed-form" class="grid cols-4" onsubmit="return false;">
-                    <div class="speed-field">
-                        <label>문 열기 속도 (DO)</label>
-                        <div class="pair">
-                            <input
-                                type="number"
-                                id="speed-do"
-                                min="0"
-                                max="255"
-                                value="0"
-                                placeholder="EEPROM 로딩 중..."
-                            />
-                            <input type="range" id="speed-do-range" min="0" max="255" value="0" />
+                    <section>
+                        <h2 style="margin-top: 0">모터 속도 설정</h2>
+                        <form id="speed-form" class="grid cols-4" onsubmit="return false;">
+                            <div class="speed-field">
+                                <label>문 열기 속도 (DO)</label>
+                                <div class="pair">
+                                    <input
+                                        type="number"
+                                        id="speed-do"
+                                        min="0"
+                                        max="255"
+                                        value="0"
+                                        placeholder="EEPROM 로딩 중..."
+                                    />
+                                    <input type="range" id="speed-do-range" min="0" max="255" value="0" />
+                                </div>
+                                <div class="adjust-row">
+                                    <button
+                                        type="button"
+                                        class="step-btn-small"
+                                        data-target="speed-do"
+                                        data-delta="-10"
+                                    >
+                                        -10
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-1">
+                                        -
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-do" data-delta="1">
+                                        +
+                                    </button>
+                                    <button class="step-btn-small" data-target="speed-do" data-delta="10">+10</button>
+                                </div>
+                            </div>
+                            <div class="speed-field">
+                                <label>문 닫기 속도 (DC)</label>
+                                <div class="pair">
+                                    <input
+                                        type="number"
+                                        id="speed-dc"
+                                        min="0"
+                                        max="255"
+                                        value="0"
+                                        placeholder="EEPROM 로딩 중..."
+                                    />
+                                    <input type="range" id="speed-dc-range" min="0" max="255" value="0" />
+                                </div>
+                                <div class="adjust-row">
+                                    <button
+                                        type="button"
+                                        class="step-btn-small"
+                                        data-target="speed-dc"
+                                        data-delta="-10"
+                                    >
+                                        -10
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-1">
+                                        -
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="1">
+                                        +
+                                    </button>
+                                    <button class="step-btn-small" data-target="speed-dc" data-delta="10">+10</button>
+                                </div>
+                            </div>
+                            <div class="speed-field">
+                                <label>24V 방향1 (D1)</label>
+                                <div class="pair">
+                                    <input
+                                        type="number"
+                                        id="speed-d1"
+                                        min="0"
+                                        max="255"
+                                        value="0"
+                                        placeholder="EEPROM 로딩 중..."
+                                    />
+                                    <input type="range" id="speed-d1-range" min="0" max="255" value="0" />
+                                </div>
+                                <div class="adjust-row">
+                                    <button
+                                        type="button"
+                                        class="step-btn-small"
+                                        data-target="speed-d1"
+                                        data-delta="-10"
+                                    >
+                                        -10
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-1">
+                                        -
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="1">
+                                        +
+                                    </button>
+                                    <button class="step-btn-small" data-target="speed-d1" data-delta="10">+10</button>
+                                </div>
+                            </div>
+                            <div class="speed-field">
+                                <label>24V 방향2 (D2)</label>
+                                <div class="pair">
+                                    <input
+                                        type="number"
+                                        id="speed-d2"
+                                        min="0"
+                                        max="255"
+                                        value="0"
+                                        placeholder="EEPROM 로딩 중..."
+                                    />
+                                    <input type="range" id="speed-d2-range" min="0" max="255" value="0" />
+                                </div>
+                                <div class="adjust-row">
+                                    <button
+                                        type="button"
+                                        class="step-btn-small"
+                                        data-target="speed-d2"
+                                        data-delta="-10"
+                                    >
+                                        -10
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-1">
+                                        -
+                                    </button>
+                                    <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="1">
+                                        +
+                                    </button>
+                                    <button class="step-btn-small" data-target="speed-d2" data-delta="10">+10</button>
+                                </div>
+                            </div>
+                        </form>
+                        <div class="inline" style="margin-top: 12px">
+                            <button id="btn-refresh-speed" class="secondary" disabled>현재값 동기화(Q)</button>
+                            <span class="small" id="auto-speed-msg" style="line-height: 1.4"
+                                >입력값 변경 후 약 0.1초 뒤 자동 전송됩니다.</span
+                            >
                         </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-10">
-                                -10
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-do" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-do" data-delta="1">
-                                +
-                            </button>
-                            <button class="step-btn-small" data-target="speed-do" data-delta="10">+10</button>
-                        </div>
-                    </div>
-                    <div class="speed-field">
-                        <label>문 닫기 속도 (DC)</label>
-                        <div class="pair">
-                            <input
-                                type="number"
-                                id="speed-dc"
-                                min="0"
-                                max="255"
-                                value="0"
-                                placeholder="EEPROM 로딩 중..."
-                            />
-                            <input type="range" id="speed-dc-range" min="0" max="255" value="0" />
-                        </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-10">
-                                -10
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-dc" data-delta="1">
-                                +
-                            </button>
-                            <button class="step-btn-small" data-target="speed-dc" data-delta="10">+10</button>
-                        </div>
-                    </div>
-                    <div class="speed-field">
-                        <label>24V 방향1 (D1)</label>
-                        <div class="pair">
-                            <input
-                                type="number"
-                                id="speed-d1"
-                                min="0"
-                                max="255"
-                                value="0"
-                                placeholder="EEPROM 로딩 중..."
-                            />
-                            <input type="range" id="speed-d1-range" min="0" max="255" value="0" />
-                        </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-10">
-                                -10
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-d1" data-delta="1">
-                                +
-                            </button>
-                            <button class="step-btn-small" data-target="speed-d1" data-delta="10">+10</button>
-                        </div>
-                    </div>
-                    <div class="speed-field">
-                        <label>24V 방향2 (D2)</label>
-                        <div class="pair">
-                            <input
-                                type="number"
-                                id="speed-d2"
-                                min="0"
-                                max="255"
-                                value="0"
-                                placeholder="EEPROM 로딩 중..."
-                            />
-                            <input type="range" id="speed-d2-range" min="0" max="255" value="0" />
-                        </div>
-                        <div class="adjust-row">
-                            <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-10">
-                                -10
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="-1">
-                                -
-                            </button>
-                            <button type="button" class="step-btn-small" data-target="speed-d2" data-delta="1">
-                                +
-                            </button>
-                            <button class="step-btn-small" data-target="speed-d2" data-delta="10">+10</button>
-                        </div>
-                    </div>
-                </form>
-                <div class="inline" style="margin-top: 12px">
-                    <button id="btn-refresh-speed" class="secondary" disabled>현재값 동기화(Q)</button>
-                    <span class="small" id="auto-speed-msg" style="line-height: 1.4"
-                        >입력값 변경 후 약 0.1초 뒤 자동 전송됩니다.</span
-                    >
-                </div>
-            </section>
+                    </section>
 
-            <section>
-                <h2 style="margin-top: 0">빠른 동작 실행</h2>
-                <div class="inline">
-                    <button data-cmd="BELT_CUT" class="quick" disabled>띠 분리기 (C)</button>
-                    <button data-cmd="DOOR_OPEN" class="quick" disabled>문 열기 (1)</button>
-                    <button data-cmd="DOOR_CLOSE" class="quick" disabled>문 닫기 (2)</button>
-                    <button data-cmd="AI_ZONE_BACK" class="quick" disabled>24V 모터 방향1 (3)</button>
-                    <button data-cmd="AI_ZONE_FWD" class="quick" disabled>24V 모터 방향2 (4)</button>
-                    <button data-cmd="AI_ZONE_RETURN" class="quick" disabled>24V 모터 정지/반환 (5)</button>
-                    <button data-cmd="AUTO_RUN" class="quick" disabled>전체 자동 (5)</button>
-                    <button data-cmd="INVERTER_ON" class="quick" disabled>MC12B 켜기 (N)</button>
-                    <button data-cmd="INVERTER_OFF" class="quick" disabled>MC12B 끄기 (M)</button>
-                    <button data-cmd="CONFIG_REVERSE" class="quick" disabled>FA-50 역회전 (V)</button>
-                    <button data-cmd="GET_STATUS" class="quick secondary" disabled>센서 상태 (0)</button>
-                    <button data-cmd="STOP" class="quick danger" disabled>긴급 정지 (X)</button>
+                    <section>
+                        <h2 style="margin-top: 0">빠른 동작 실행</h2>
+                        <div class="inline">
+                            <button data-cmd="BELT_CUT" class="quick" disabled>띠 분리기 (C)</button>
+                            <button data-cmd="DOOR_OPEN" class="quick" disabled>문 열기 (1)</button>
+                            <button data-cmd="DOOR_CLOSE" class="quick" disabled>문 닫기 (2)</button>
+                            <button data-cmd="AI_ZONE_BACK" class="quick" disabled>24V 모터 방향1 (3)</button>
+                            <button data-cmd="AI_ZONE_FWD" class="quick" disabled>24V 모터 방향2 (4)</button>
+                            <button data-cmd="AI_ZONE_RETURN" class="quick" disabled>24V 모터 반환 (5)</button>
+                            <button data-cmd="AUTO_RUN" class="quick" disabled>전체 자동 (5)</button>
+                            <button data-cmd="INVERTER_ON" class="quick" disabled>MC12B 켜기 (N)</button>
+                            <button data-cmd="INVERTER_OFF" class="quick" disabled>MC12B 끄기 (M)</button>
+                            <button data-cmd="CONFIG_REVERSE" class="quick" disabled>FA-50 역회전 (V)</button>
+                            <button data-cmd="GET_STATUS" class="quick secondary" disabled>센서 상태 (0)</button>
+                            <button data-cmd="STOP" class="quick danger" disabled>긴급 정지 (X)</button>
+                        </div>
+                    </section>
                 </div>
-            </section>
+                <!-- /.admin-controls -->
+
+                <!-- ========== 센서 상태 패널 ========== -->
+                <aside class="sensor-panel" id="sensor-panel">
+                    <div class="sensor-panel-header">
+                        <h2>센서 상태</h2>
+                        <div style="display: flex; align-items: center; gap: 8px">
+                            <span class="small" id="sensor-last-update">연결 대기 중</span>
+                            <button
+                                id="btn-sensor-refresh"
+                                class="secondary"
+                                style="padding: 4px 10px; font-size: 0.8rem"
+                                disabled
+                            >
+                                새로고침
+                            </button>
+                        </div>
+                    </div>
+                    <div id="sensor-placeholder" class="sensor-placeholder">
+                        장비를 연결하면 센서 상태가 표시됩니다.
+                    </div>
+                    <div class="sensor-list" id="sensor-list" style="display: none">
+                        <!-- AI_ZONE 센서 -->
+                        <div class="sensor-group-title">AI ZONE 센서</div>
+                        <div class="sensor-row" id="sr-ai1">
+                            <span class="sensor-dot" id="sd-ai1"></span>
+                            <span class="sensor-label">Sensor1 (Pin 27)</span>
+                            <span class="sensor-value" id="sv-ai1">-</span>
+                        </div>
+                        <div class="sensor-row" id="sr-ai2">
+                            <span class="sensor-dot" id="sd-ai2"></span>
+                            <span class="sensor-label">Sensor2 (Pin 28)</span>
+                            <span class="sensor-value" id="sv-ai2">-</span>
+                        </div>
+                        <div class="sensor-row" id="sr-ai3">
+                            <span class="sensor-dot" id="sd-ai3"></span>
+                            <span class="sensor-label">Sensor3 (Pin 26)</span>
+                            <span class="sensor-value" id="sv-ai3">-</span>
+                        </div>
+                        <!-- 투입구 센서 -->
+                        <div class="sensor-group-title">투입구 센서</div>
+                        <div class="sensor-row" id="sr-door-open">
+                            <span class="sensor-dot" id="sd-door-open"></span>
+                            <span class="sensor-label">문 열림 (Pin 37)</span>
+                            <span class="sensor-value" id="sv-door-open">-</span>
+                        </div>
+                        <div class="sensor-row" id="sr-door-close">
+                            <span class="sensor-dot" id="sd-door-close"></span>
+                            <span class="sensor-label">문 닫힘 (Pin 36)</span>
+                            <span class="sensor-value" id="sv-door-close">-</span>
+                        </div>
+                        <!-- 기타 센서 -->
+                        <div class="sensor-group-title">기타 센서</div>
+                        <div class="sensor-row" id="sr-hand">
+                            <span class="sensor-dot" id="sd-hand"></span>
+                            <span class="sensor-label">손 감지 (Pin 22)</span>
+                            <span class="sensor-value" id="sv-hand">-</span>
+                        </div>
+                        <div class="sensor-row" id="sr-belt">
+                            <span class="sensor-dot" id="sd-belt"></span>
+                            <span class="sensor-label">띠 분리기 (Pin 25)</span>
+                            <span class="sensor-value" id="sv-belt">-</span>
+                        </div>
+                        <div class="sensor-row" id="sr-photo">
+                            <span class="sensor-dot" id="sd-photo"></span>
+                            <span class="sensor-label">포토센서 (Pin 21)</span>
+                            <span class="sensor-value" id="sv-photo">-</span>
+                        </div>
+                        <!-- 시스템 상태 -->
+                        <div class="sensor-group-title">시스템</div>
+                        <div class="sensor-row" id="sr-login">
+                            <span class="sensor-dot" id="sd-login"></span>
+                            <span class="sensor-label">로그인 상태</span>
+                            <span class="sensor-value" id="sv-login">-</span>
+                        </div>
+                    </div>
+                </aside>
+                <!-- /.sensor-panel -->
+            </div>
+            <!-- /.admin-layout -->
         </main>
 
         <!-- 플로팅 로그 창 -->
