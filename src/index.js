@@ -1154,10 +1154,10 @@ function showScreen(screenId) {
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
 
-            // 5개 이상이면 바로 메인으로 이동 (2초 후 collection.html로 자동 이동)
+            // 5개 이상이면 기존처럼 종료 처리 후 메인으로 이동 (2초 후 collection.html로 자동 이동)
             const count = getTotalBottleCount();
             if (count >= 5) {
-                showScreen('main-screen');
+                finalizeAndReturnHome();
                 return;
             }
 
@@ -1178,13 +1178,7 @@ function showScreen(screenId) {
             clearTimeout(autoReturnTimeout);
             clearInterval(countdownInterval);
 
-            // 5개 이상이면 바로 메인으로 이동 (2초 후 collection.html로 자동 이동)
-            const count = getTotalBottleCount();
-            if (count >= 5) {
-                showScreen('main-screen');
-                return;
-            }
-
+            // 5개 이상이든 아니든 동일하게 finalizeAndReturnHome() 호출
             finalizeAndReturnHome();
         };
     } else {
