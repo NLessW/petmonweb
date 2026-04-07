@@ -547,13 +547,19 @@ function incrementBottleCount() {
     const current = getTotalBottleCount();
     const newCount = current + 1;
     setTotalBottleCount(newCount);
-
-    // 테스트로 5개 도달 시 collection.html로 이동 원래 800개
-    if (newCount >= 5) {
-        window.location.href = 'collection.html';
-    }
-
     return newCount;
+}
+
+function checkAndRedirectToCollection() {
+    const count = getTotalBottleCount();
+    if (count >= 5) {
+        // 5개 이상이면 collection.html로 이동
+        setTimeout(() => {
+            window.location.href = 'collection.html';
+        }, 100);
+        return true;
+    }
+    return false;
 }
 
 function updateMachineStatusDisplay() {
@@ -1010,6 +1016,11 @@ function showScreen(screenId) {
         updateLoginButtonByStatus();
         updateMachineStatusDisplay();
 
+        // 5개 이상이면 collection.html로 이동
+        if (checkAndRedirectToCollection()) {
+            return;
+        }
+
         // X 신호 전송 후 새로고침
         (async () => {
             if (writer) {
@@ -1143,6 +1154,36 @@ function showScreen(screenId) {
             clearInterval(countdownInterval);
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
+
+            // 5개 이상이면 가득 찼다는 화면 표시
+            const count = getTotalBottleCount();
+            if (count >= 5) {
+                const fullScreen = document.getElementById('end-screen');
+                if (fullScreen) {
+                    fullScreen.innerHTML = `
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;">
+                            <div style="margin-bottom:24px;">
+                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+                                    <path d="M12 7v6M12 16h.01" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div style="font-size:2.4rem;font-weight:bold;color:#ff6b6b;margin-bottom:20px;text-align:center;">
+                                페트병이 가득 찼습니다!
+                            </div>
+                            <div style="font-size:1.5rem;color:#e8eefc;margin-bottom:32px;text-align:center;">
+                                수거 후 이용 가능합니다.<br>
+                                잠시 후 처음 화면으로 돌아갑니다.
+                            </div>
+                        </div>
+                    `;
+                }
+                setTimeout(() => {
+                    showScreen('main-screen');
+                }, 3000);
+                return;
+            }
+
             try {
                 // 로그인(LOGIN_USER) 전송 후 잠시 대기 -> 띠 분리기부터 재시작
                 await writeCmdWithAck('LOGIN_USER');
@@ -1159,6 +1200,36 @@ function showScreen(screenId) {
         document.getElementById('return-home').onclick = () => {
             clearTimeout(autoReturnTimeout);
             clearInterval(countdownInterval);
+
+            // 5개 이상이면 가득 찼다는 화면 표시
+            const count = getTotalBottleCount();
+            if (count >= 5) {
+                const fullScreen = document.getElementById('end-screen');
+                if (fullScreen) {
+                    fullScreen.innerHTML = `
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;">
+                            <div style="margin-bottom:24px;">
+                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+                                    <path d="M12 7v6M12 16h.01" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div style="font-size:2.4rem;font-weight:bold;color:#ff6b6b;margin-bottom:20px;text-align:center;">
+                                페트병이 가득 찼습니다!
+                            </div>
+                            <div style="font-size:1.5rem;color:#e8eefc;margin-bottom:32px;text-align:center;">
+                                수거 후 이용 가능합니다.<br>
+                                잠시 후 처음 화면으로 돌아갑니다.
+                            </div>
+                        </div>
+                    `;
+                }
+                setTimeout(() => {
+                    showScreen('main-screen');
+                }, 3000);
+                return;
+            }
+
             finalizeAndReturnHome();
         };
     } else {
