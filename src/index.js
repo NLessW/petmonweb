@@ -1154,9 +1154,18 @@ function showScreen(screenId) {
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
 
-            // 5개 이상이면 기존처럼 종료 처리 후 메인으로 이동 (2초 후 collection.html로 자동 이동)
+            // 5개 이상이면 모터 정지 후 종료 처리
             const count = getTotalBottleCount();
             if (count >= 5) {
+                try {
+                    // 모든 모터 정지
+                    if (writer) {
+                        await writeCmdWithAck('STOP');
+                        console.log('5개 도달: 모터 정지 완료');
+                    }
+                } catch (e) {
+                    console.error('5개 도달: 모터 정지 실패:', e);
+                }
                 finalizeAndReturnHome();
                 return;
             }
@@ -1174,11 +1183,24 @@ function showScreen(screenId) {
                 if (btn) btn.disabled = false;
             }
         };
-        document.getElementById('return-home').onclick = () => {
+        document.getElementById('return-home').onclick = async () => {
             clearTimeout(autoReturnTimeout);
             clearInterval(countdownInterval);
 
-            // 5개 이상이든 아니든 동일하게 finalizeAndReturnHome() 호출
+            // 5개 이상이면 모터 정지 후 종료 처리
+            const count = getTotalBottleCount();
+            if (count >= 5) {
+                try {
+                    // 모든 모터 정지
+                    if (writer) {
+                        await writeCmdWithAck('STOP');
+                        console.log('5개 도달: 모터 정지 완료');
+                    }
+                } catch (e) {
+                    console.error('5개 도달: 모터 정지 실패:', e);
+                }
+            }
+
             finalizeAndReturnHome();
         };
     } else {
