@@ -548,8 +548,8 @@ function incrementBottleCount() {
     const newCount = current + 1;
     setTotalBottleCount(newCount);
 
-    // 800개 도달 시 collection.html로 이동
-    if (newCount >= 800) {
+    // 테스트로 5개 도달 시 collection.html로 이동 원래 800개
+    if (newCount >= 5) {
         window.location.href = 'collection.html';
     }
 
