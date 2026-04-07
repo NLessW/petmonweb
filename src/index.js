@@ -552,8 +552,8 @@ function incrementBottleCount() {
 
 function checkAndRedirectToCollection() {
     const count = getTotalBottleCount();
-    if (count >= 5) {
-        // 5개 이상이면 2초 후 collection.html로 이동
+    if (count >= 700) {
+        // 700개 이상이면 2초 후 collection.html로 이동
         setTimeout(() => {
             window.location.href = 'collection.html';
         }, 2000);
@@ -1154,9 +1154,9 @@ function showScreen(screenId) {
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
 
-            // 5개 이상이면 가득 찼다는 화면 먼저 표시
+            // 700개 이상이면 가득 찼다는 화면 먼저 표시
             const count = getTotalBottleCount();
-            if (count >= 5) {
+            if (count >= 700) {
                 const fullScreen = document.getElementById('end-screen');
                 if (fullScreen) {
                     fullScreen.innerHTML = `
@@ -1210,9 +1210,9 @@ function showScreen(screenId) {
             clearTimeout(autoReturnTimeout);
             clearInterval(countdownInterval);
 
-            // 5개 이상이면 가득 찼다는 화면 먼저 표시
+            // 700개 이상이면 가득 찼다는 화면 먼저 표시
             const count = getTotalBottleCount();
-            if (count >= 5) {
+            if (count >= 700) {
                 const fullScreen = document.getElementById('end-screen');
                 if (fullScreen) {
                     fullScreen.innerHTML = `
@@ -2776,9 +2776,9 @@ if (typeof window !== 'undefined') {
     window.addEventListener('DOMContentLoaded', () => {
         updateMachineStatusDisplay();
 
-        // 5개 이상이면 바로 수거 화면으로 이동
+        // 700개 이상이면 바로 수거 화면으로 이동
         const count = getTotalBottleCount();
-        if (count >= 5) {
+        if (count >= 700) {
             setTimeout(() => {
                 window.location.href = 'collection.html';
             }, 1000);

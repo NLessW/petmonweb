@@ -111,24 +111,42 @@
 
             (function () {
                 const BTN = document.getElementById('btn-admin-enter');
+                let clickCount = 0;
+                let clickTimer = null;
+
                 BTN?.addEventListener('click', async () => {
                     try {
-                        if (typeof window.requireAdminPin === 'function') {
-                            const ok = await window.requireAdminPin();
-                            if (ok) {
-                                // 비밀번호 확인 성공 시 localStorage 리셋
-                                try {
-                                    localStorage.setItem('petmon.totalBottles', '0');
-                                    alert('수거가 완료되었습니다. 페트병 개수가 초기화되었습니다.');
-                                    window.location.href = 'index.html';
-                                } catch (e) {
-                                    console.error('리셋 실패:', e);
-                                    alert('오류가 발생했습니다. 다시 시도해주세요.');
+                        clickCount++;
+
+                        // 첫 클릭이면 타이머 시작
+                        if (clickCount === 1) {
+                            clickTimer = setTimeout(() => {
+                                clickCount = 0; // 2초 경과 시 카운트 리셋
+                            }, 2000);
+                        }
+
+                        // 5번 클릭 달성
+                        if (clickCount >= 5) {
+                            clearTimeout(clickTimer);
+                            clickCount = 0;
+
+                            if (typeof window.requireAdminPin === 'function') {
+                                const ok = await window.requireAdminPin();
+                                if (ok) {
+                                    // 비밀번호 확인 성공 시 localStorage 리셋
+                                    try {
+                                        localStorage.setItem('petmon.totalBottles', '0');
+                                        alert('수거가 완료되었습니다. 페트병 개수가 초기화되었습니다.');
+                                        window.location.href = 'index.html';
+                                    } catch (e) {
+                                        console.error('리셋 실패:', e);
+                                        alert('오류가 발생했습니다. 다시 시도해주세요.');
+                                    }
                                 }
+                            } else {
+                                // PIN 모듈이 로드되지 않았을 때
+                                alert('관리자 인증이 필요합니다.');
                             }
-                        } else {
-                            // PIN 모듈이 로드되지 않았을 때
-                            alert('관리자 인증이 필요합니다.');
                         }
                     } catch {}
                 });
