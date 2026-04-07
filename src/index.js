@@ -1154,19 +1154,42 @@ function showScreen(screenId) {
             const btn = document.getElementById('add-more-button');
             if (btn) btn.disabled = true;
 
-            // 5개 이상이면 모터 정지 후 종료 처리
+            // 5개 이상이면 가득 찼다는 화면 먼저 표시
             const count = getTotalBottleCount();
             if (count >= 5) {
-                try {
-                    // 모든 모터 정지
-                    if (writer) {
-                        await writeCmdWithAck('STOP');
-                        console.log('5개 도달: 모터 정지 완료');
-                    }
-                } catch (e) {
-                    console.error('5개 도달: 모터 정지 실패:', e);
+                const fullScreen = document.getElementById('end-screen');
+                if (fullScreen) {
+                    fullScreen.innerHTML = `
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;">
+                            <div style="margin-bottom:24px;">
+                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+                                    <path d="M12 7v6M12 16h.01" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div style="font-size:2.4rem;font-weight:bold;color:#ff6b6b;margin-bottom:20px;text-align:center;">
+                                페트병이 가득 찼습니다!
+                            </div>
+                            <div style="font-size:1.5rem;color:#e8eefc;margin-bottom:32px;text-align:center;">
+                                더 이상 넣을 수 없습니다.<br>
+                                수거 후 이용 가능합니다.
+                            </div>
+                        </div>
+                    `;
                 }
-                finalizeAndReturnHome();
+
+                // 3초 후 모터 정지 및 메인으로 이동
+                setTimeout(async () => {
+                    try {
+                        if (writer) {
+                            await writeCmdWithAck('STOP');
+                            console.log('5개 도달: 모터 정지 완료');
+                        }
+                    } catch (e) {
+                        console.error('5개 도달: 모터 정지 실패:', e);
+                    }
+                    finalizeAndReturnHome();
+                }, 3000);
                 return;
             }
 
@@ -1187,18 +1210,43 @@ function showScreen(screenId) {
             clearTimeout(autoReturnTimeout);
             clearInterval(countdownInterval);
 
-            // 5개 이상이면 모터 정지 후 종료 처리
+            // 5개 이상이면 가득 찼다는 화면 먼저 표시
             const count = getTotalBottleCount();
             if (count >= 5) {
-                try {
-                    // 모든 모터 정지
-                    if (writer) {
-                        await writeCmdWithAck('STOP');
-                        console.log('5개 도달: 모터 정지 완료');
-                    }
-                } catch (e) {
-                    console.error('5개 도달: 모터 정지 실패:', e);
+                const fullScreen = document.getElementById('end-screen');
+                if (fullScreen) {
+                    fullScreen.innerHTML = `
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;">
+                            <div style="margin-bottom:24px;">
+                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+                                    <path d="M12 7v6M12 16h.01" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div style="font-size:2.4rem;font-weight:bold;color:#ff6b6b;margin-bottom:20px;text-align:center;">
+                                페트병이 가득 찼습니다!
+                            </div>
+                            <div style="font-size:1.5rem;color:#e8eefc;margin-bottom:32px;text-align:center;">
+                                수거 후 이용 가능합니다.<br>
+                                잠시 후 처음 화면으로 돌아갑니다.
+                            </div>
+                        </div>
+                    `;
                 }
+
+                // 3초 후 모터 정지 및 메인으로 이동
+                setTimeout(async () => {
+                    try {
+                        if (writer) {
+                            await writeCmdWithAck('STOP');
+                            console.log('5개 도달: 모터 정지 완료');
+                        }
+                    } catch (e) {
+                        console.error('5개 도달: 모터 정지 실패:', e);
+                    }
+                    finalizeAndReturnHome();
+                }, 3000);
+                return;
             }
 
             finalizeAndReturnHome();
@@ -1923,6 +1971,9 @@ async function startProcess() {
 
             // localStorage에 전체 개수 저장 및 800개 체크
             incrementBottleCount();
+
+            // 화면에 즉시 개수 반영
+            updateMachineStatusDisplay();
 
             showScreen('end-screen');
         } catch (err) {
