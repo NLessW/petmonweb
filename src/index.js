@@ -1861,9 +1861,6 @@ async function startProcess() {
                             throw jamErr;
                         }
                     }
-                    // 포토센서 CLEAR 신호 대기 (AI_ZONE 투입 영역이 비워진 것을 확인, 최대 30초)
-                    renderProcess('scan', '투입 영역 확인 중...', 2);
-                    await waitForArduinoResponse('CLEAR', { timeoutMs: 30000 });
                 } else if (commands[i].cmd === 'AI_ZONE_FWD') {
                     // 수집 타임아웃 30초 + 1회 재시도 로직 추가
                     try {
