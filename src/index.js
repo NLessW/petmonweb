@@ -2771,10 +2771,18 @@ async function connectToFaduino() {
     }
 }
 
-// ========== 페이지 로드 시 개수 표시 ==========
+// ========== 페이지 로드 시 개수 표시 및 수거 화면 체크 ==========
 if (typeof window !== 'undefined') {
     window.addEventListener('DOMContentLoaded', () => {
         updateMachineStatusDisplay();
+
+        // 5개 이상이면 바로 수거 화면으로 이동
+        const count = getTotalBottleCount();
+        if (count >= 5) {
+            setTimeout(() => {
+                window.location.href = 'collection.html';
+            }, 1000);
+        }
     });
 }
 
