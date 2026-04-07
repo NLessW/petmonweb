@@ -99,6 +99,16 @@
         <script src="./src/adminPin.js"></script>
         <script src="./src/hotkeys.js"></script>
         <script>
+            // 페이지 로드 시 현재 개수 표시 (필요 시)
+            window.addEventListener('DOMContentLoaded', () => {
+                try {
+                    const count = localStorage.getItem('petmon.totalBottles') || '800';
+                    console.log('현재 페트병 개수:', count);
+                } catch (e) {
+                    console.error('개수 조회 실패:', e);
+                }
+            });
+
             (function () {
                 const BTN = document.getElementById('btn-admin-enter');
                 BTN?.addEventListener('click', async () => {
@@ -106,12 +116,19 @@
                         if (typeof window.requireAdminPin === 'function') {
                             const ok = await window.requireAdminPin();
                             if (ok) {
-                                // 관리자 페이지로 이동하여 점검 해제/설정 토글 가능
-                                window.location.href = './src/adminManage.html';
+                                // 비밀번호 확인 성공 시 localStorage 리셋
+                                try {
+                                    localStorage.setItem('petmon.totalBottles', '0');
+                                    alert('수거가 완료되었습니다. 페트병 개수가 초기화되었습니다.');
+                                    window.location.href = 'index.html';
+                                } catch (e) {
+                                    console.error('리셋 실패:', e);
+                                    alert('오류가 발생했습니다. 다시 시도해주세요.');
+                                }
                             }
                         } else {
-                            // PIN 모듈이 로드되지 않았을 때는 안전하게 관리자 페이지로 이동
-                            window.location.href = './src/adminManage.html';
+                            // PIN 모듈이 로드되지 않았을 때
+                            alert('관리자 인증이 필요합니다.');
                         }
                     } catch {}
                 });

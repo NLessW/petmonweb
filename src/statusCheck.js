@@ -223,25 +223,28 @@ async function periodicStatusCheck() {
     }
 
     // 이후 10분마다 상태 확인 (에러는 삼켜서 UI 끊김 방지)
-    statusCheckInterval = setInterval(async () => {
-        // 점검 모드가 되면 즉시 중단
-        if (window.__maintenanceMode) {
-            window.stopPeriodicStatusCheck();
-            return;
-        }
-        // 프로세스 화면이 활성화된 경우 상태 체크를 건너뛰어 간섭 방지
-        const processEl = document.getElementById('process-screen');
-        if (processEl && getComputedStyle(processEl).display !== 'none') {
-            return;
-        }
+    statusCheckInterval = setInterval(
+        async () => {
+            // 점검 모드가 되면 즉시 중단
+            if (window.__maintenanceMode) {
+                window.stopPeriodicStatusCheck();
+                return;
+            }
+            // 프로세스 화면이 활성화된 경우 상태 체크를 건너뛰어 간섭 방지
+            const processEl = document.getElementById('process-screen');
+            if (processEl && getComputedStyle(processEl).display !== 'none') {
+                return;
+            }
 
-        console.log('10분마다 상태 확인 중...');
-        try {
-            await checkArduinoStatusOnce();
-        } catch (e) {
-            console.debug('Periodic status check ignored error', e);
-        }
-    }, 10 * 60 * 1000); // 10분 테스트는 1분.
+            console.log('10분마다 상태 확인 중...');
+            try {
+                await checkArduinoStatusOnce();
+            } catch (e) {
+                console.debug('Periodic status check ignored error', e);
+            }
+        },
+        10 * 60 * 1000,
+    ); // 10분 테스트는 1분.
 }
 
 // 페이지 로드 시 상태 확인 타이머 시작 (점검 모드가 아니어야 시작)

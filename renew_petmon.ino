@@ -1108,6 +1108,8 @@ public:
         if (cmd == "CONFIG_REVERSE")   { sendAck(cmd); InverterController::setRevMode(!sys.isReverseMode); return true; }
         if (cmd == "INVERTER_OFF")     { sendAck(cmd); InverterController::disable(); return true; }
         if (cmd == "INVERTER_ON")      { sendAck(cmd); InverterController::on(); return true; }
+        if (cmd == "RELAY_ON")         { sendAck(cmd); digitalWrite(Pin::BELT_MOTOR, HIGH); Serial1.println("Relay ON (Pin 48)"); return true; }
+        if (cmd == "RELAY_OFF")        { sendAck(cmd); digitalWrite(Pin::BELT_MOTOR, LOW);  Serial1.println("Relay OFF (Pin 48)"); return true; }
         
         return false; // 없는 명령어
     }

@@ -10,7 +10,7 @@
  * accordance with the terms of the license agreement you entered into with [ReHAN Co. LTD.].
   -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html>
     <head>
         <meta charset="utf-8" />
@@ -27,7 +27,7 @@
             content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0"
         />
     </head>
-    <body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
+    <body oncontextmenu="return false;" onselectstart="return false" ondragstart="return false;">
         <!-- 메인 화면과 상태 표시 -->
         <div class="main-layout">
             <!-- 메인 화면 -->
@@ -379,7 +379,17 @@
                             if (startBtn) startBtn.disabled = true;
                         } else {
                             setStatus(arduinoEl, '정상', 'status-green');
-                            setStatus(machineEl, '가능', 'status-green');
+                            // machineEl에 개수 표시
+                            if (machineEl) {
+                                try {
+                                    const count = localStorage.getItem('petmon.totalBottles') || '0';
+                                    machineEl.textContent = count + '개';
+                                    machineEl.classList.remove('status-green', 'status-yellow', 'status-red');
+                                    machineEl.classList.add('status-green');
+                                } catch {
+                                    setStatus(machineEl, '가능', 'status-green');
+                                }
+                            }
                             if (startBtn) startBtn.disabled = false;
                         }
                     } catch {}

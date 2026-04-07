@@ -525,6 +525,57 @@ let isFinalizing = false;
 // 엔드포인트 API 호출
 let lastPointApi = { mobile: null, count: 0, result: null };
 
+// ====== 전체 페트병 개수 관리 (localStorage) ======
+function getTotalBottleCount() {
+    try {
+        const count = localStorage.getItem('petmon.totalBottles');
+        return count ? parseInt(count, 10) : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function setTotalBottleCount(count) {
+    try {
+        localStorage.setItem('petmon.totalBottles', String(count));
+    } catch (e) {
+        console.error('localStorage 저장 실패:', e);
+    }
+}
+
+function incrementBottleCount() {
+    const current = getTotalBottleCount();
+    const newCount = current + 1;
+    setTotalBottleCount(newCount);
+
+    // 800개 도달 시 collection.html로 이동
+    if (newCount >= 800) {
+        window.location.href = 'collection.html';
+    }
+
+    return newCount;
+}
+
+function updateMachineStatusDisplay() {
+    const machineStatus = document.getElementById('machine-status');
+    if (!machineStatus) return;
+
+    const inMaintenance = !!(window && window.__maintenanceMode);
+    const hardLock = !!(window && window.__hardLock);
+
+    if (inMaintenance || hardLock) {
+        machineStatus.textContent = '투입 불가';
+        machineStatus.style.color = '#ff4d4d';
+    } else if (isConnected) {
+        const count = getTotalBottleCount();
+        machineStatus.textContent = `${count}개`;
+        machineStatus.style.color = '#00ff4c';
+    } else {
+        machineStatus.textContent = '투입 불가';
+        machineStatus.style.color = '#ff4d4d';
+    }
+}
+
 // ====== OPFS 기반 포인트 결과 로그 ======
 async function appendPointLog(line) {
     try {
@@ -735,15 +786,11 @@ async function chooseSerialPort() {
             if (window.startPeriodicStatusCheck) window.startPeriodicStatusCheck();
         }
         const arduinoStatus = document.getElementById('arduino-status');
-        const machineStatus = document.getElementById('machine-status');
         if (arduinoStatus) {
             arduinoStatus.textContent = '정상';
             arduinoStatus.style.color = '#00ff4c';
         }
-        if (machineStatus) {
-            machineStatus.textContent = '가능';
-            machineStatus.style.color = '#00ff4c';
-        }
+        updateMachineStatusDisplay();
         if (document.getElementById('main-screen')?.style.display === 'flex') {
             updateLoginButtonByStatus();
         }
@@ -961,6 +1008,7 @@ function showScreen(screenId) {
     if (screenId === 'main-screen' && loginButton) {
         loginPopup.style.display = 'none';
         updateLoginButtonByStatus();
+        updateMachineStatusDisplay();
 
         // X 신호 전송 후 새로고침
         (async () => {
@@ -1190,15 +1238,12 @@ function showErrorScreen(message) {
     }
     // 상태를 점검중으로 표시
     const arduinoStatus = document.getElementById('arduino-status');
-    const machineStatus = document.getElementById('machine-status');
     if (arduinoStatus) {
         arduinoStatus.textContent = '준비 중';
         arduinoStatus.style.color = '#ff4d4d';
     }
-    if (machineStatus) {
-        machineStatus.textContent = '투입 불가';
-        machineStatus.style.color = '#ff4d4d';
-    }
+
+    updateMachineStatusDisplay(); // 불가능 상태로 표시
     // 로그인 버튼 비활성화 및 상태 변경
     if (loginButton) {
         loginButton.disabled = true;
@@ -1836,6 +1881,10 @@ async function startProcess() {
                 }
             }
             depositCount += 1;
+
+            // localStorage에 전체 개수 저장 및 800개 체크
+            incrementBottleCount();
+
             showScreen('end-screen');
         } catch (err) {
             if (handleDeviceLost(err)) return;
@@ -2586,10 +2635,7 @@ async function connectToFaduino() {
                 arduinoStatus.textContent = '정상';
                 arduinoStatus.style.color = '#00ff4c';
             }
-            if (machineStatus) {
-                machineStatus.textContent = '가능';
-                machineStatus.style.color = '#00ff4c';
-            }
+            updateMachineStatusDisplay();
             const isMainVisible = document.getElementById('main-screen')?.style.display === 'flex';
             const inMaintenance = !!(window && window.__maintenanceMode);
             if (isMainVisible) updateLoginButtonByStatus();
@@ -2624,10 +2670,7 @@ async function connectToFaduino() {
             arduinoStatus.textContent = '정상';
             arduinoStatus.style.color = '#00ff4c';
         }
-        if (machineStatus) {
-            machineStatus.textContent = '가능';
-            machineStatus.style.color = '#00ff4c';
-        }
+        updateMachineStatusDisplay();
         const isMainVisible = document.getElementById('main-screen')?.style.display === 'flex';
         const inMaintenance = !!(window && window.__maintenanceMode);
         if (isMainVisible) updateLoginButtonByStatus();
@@ -2636,6 +2679,13 @@ async function connectToFaduino() {
         isConnected = false;
         showErrorScreen('기기 연결에 실패했습니다. 관리자에게 문의해주세요.');
     }
+}
+
+// ========== 페이지 로드 시 개수 표시 ==========
+if (typeof window !== 'undefined') {
+    window.addEventListener('DOMContentLoaded', () => {
+        updateMachineStatusDisplay();
+    });
 }
 
 // ========== 이벤트 ==========
