@@ -1888,6 +1888,13 @@ async function startProcess() {
                     renderProcess('collect', commands[i].msg, 3, { spin: true });
                 }
 
+                // AI_ZONE_BACK 전에 LED_TEST 먼저 실행
+                if (commands[i].cmd === 'AI_ZONE_BACK') {
+                    await writeCmdWithAck('LED_TEST');
+                    await waitForArduinoResponse('led blink success', { timeoutMs: 5000 });
+                    await new Promise((r) => setTimeout(r, 100));
+                }
+
                 await writeCmdWithAck(commands[i].cmd);
                 await new Promise((r) => setTimeout(r, 50));
 
@@ -1944,6 +1951,11 @@ async function startProcess() {
 
                                 // 2. 자원 판별 (3) - 다시 시도하고 루프 계속 (다시 끼임 감지 가능)
                                 renderProcess('scan', `자원을 판별하는 중입니다... )`, 2);
+                                // LED 점멸 먼저 실행
+                                await writeCmdWithAck('LED_TEST');
+                                await waitForArduinoResponse('led blink success', { timeoutMs: 5000 });
+                                await new Promise((r) => setTimeout(r, 100));
+                                // 자원 판별 실행
                                 await writeCmdWithAck('AI_ZONE_BACK');
                                 // 루프 계속하여 waitForSensor2WithJamDetection 다시 호출
                                 continue;
