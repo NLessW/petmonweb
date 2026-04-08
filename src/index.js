@@ -1908,6 +1908,8 @@ async function startProcess() {
                         try {
                             await waitForSensor2WithJamDetection({ timeoutMs: 30000 });
                             jamRecoveryLoop = false; // 정상 완료 시 탈출
+                            // AI_ZONE_BACK 완료 후 2초 대기
+                            await new Promise((r) => setTimeout(r, 2000));
                         } catch (jamErr) {
                             // 메인으로 강제 복귀 (기기 장애 버튼 대응)
                             if (jamErr && jamErr.__forceMain) {
@@ -2665,7 +2667,7 @@ async function runCloseClassifyCollectSequence() {
     await waitForAnyArduinoResponse(['led blink success'], { timeoutMs: 8000, silent: true });
     await writeCmdWithAck('AI_ZONE_BACK');
     await waitForArduinoResponse('Sensor2 reached (LOW).');
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 2000));
 
     // 4. 수집중
     renderProcess('collect', '자원을 수집하는 중입니다...', 3, { spin: true });
