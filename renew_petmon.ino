@@ -14,7 +14,7 @@
  */
 
 /*
- * Copyright (c) 2026 (주)리한 (ReHAN Co. LTD.)
+ * Copyright (c) 2026 (주)리한 (ReHAN Co., LTD.)
  * All rights reserved.
  *
  * 이 소프트웨어와 관련 문서의 저작권은 (주)리한에 있으며,
@@ -58,7 +58,6 @@ namespace Pin {
     constexpr int SENSOR_DOOR_OPEN = 37;
     constexpr int SENSOR_DOOR_CLOSE= 36;
     constexpr int SENSOR_HAND      = 22;
-    constexpr int SENSOR_PHOTO     = 26;  
 
     // LEDs
     constexpr int LED_RED  = 46;
@@ -100,10 +99,6 @@ struct SystemState {
     bool BELTCutterDone = false;
     bool BELTOpenTriggered = false;
     bool BELTManualTrigger = false;
-
-    // 포토센서 CLEAR 모니터링 상태
-    bool photoClearSent = false;
-    unsigned long photoLastDetectedMs = 0;   // 마지막으로 감지된 시각 (0 = 아직 한번도 감지 안됨)
 };
 
 SystemState sys; // 전역 인스턴스
@@ -388,7 +383,6 @@ public:
         pinMode(Pin::SENSOR_HAND, INPUT);
         pinMode(Pin::BELT_SWITCH, INPUT);
         pinMode(Pin::BELT_SENSOR, INPUT);
-        pinMode(Pin::SENSOR_PHOTO, INPUT);   // 오토닉스 포토센서
     }
     // -----------------------------------------------------
     // AI 감지 영역 센서
@@ -409,8 +403,6 @@ public:
     // 손 감지 센서
     // -----------------------------------------------------
     static bool isHandDetected() { return digitalRead(Pin::SENSOR_HAND) == HIGH; }
-    // 포토센서: LOW = 감지됨, HIGH = 미감지(CLEAR)
-    static bool isPhotoDetected() { return digitalRead(Pin::SENSOR_PHOTO) == LOW; }
 
     // -----------------------------------------------------
     // 센서 상태 (시리얼 디버그)
@@ -422,8 +414,11 @@ public:
         Serial1.print("Door Open Sensor (Pin 37): "); Serial1.println(digitalRead(Pin::SENSOR_DOOR_OPEN) == HIGH ? "HIGH (Door Open)" : "LOW (Door Closed)");
         Serial1.print("Door Close Sensor (Pin 36): "); Serial1.println(digitalRead(Pin::SENSOR_DOOR_CLOSE) == HIGH ? "HIGH (Door Closed)" : "LOW (Door Open)");
         Serial1.print("Hand Sensor (Pin 22): "); Serial1.println(digitalRead(Pin::SENSOR_HAND) == HIGH ? "HIGH (Hand Detected)" : "LOW (No Hand)");
-        Serial1.print("Belt Senser (Pin 25): "); Serial1.println(digitalRead(Pin::BELT_SENSOR) == HIGH ? "HIGH (Abnormal)" : "LOW (Normal)");
-        Serial1.print("Photo Sensor (Pin 21): "); Serial1.println(digitalRead(Pin::SENSOR_PHOTO) == LOW ? "LOW (Detected)" : "HIGH (Clear)");
+        Serial1.print("Belt Senser (Pin 25): "); Serial1.println(digitalRead(Pin::BELT_SENSOR) == HIGH ? "HIGH (Normal)" : "LOW (Abnormal)");
+        Serial1.print("MC12B Enable Sensor50 (Pin 50): "); Serial1.println(digitalRead(50) == HIGH ? "HIGH" : "LOW");
+        Serial1.print("MC12B Enable Sensor51 (Pin 51): "); Serial1.println(digitalRead(Pin::INVERTER_ENABLE) == HIGH ? "HIGH" : "LOW");
+        Serial1.print("Inverter REV Sensor (Pin 39): "); Serial1.println(digitalRead(Pin::INVERTER_REV) == HIGH ? "HIGH" : "LOW");
+        Serial1.print("Inverter FWD Sensor (Pin 40): "); Serial1.println(digitalRead(Pin::INVERTER_FWD) == HIGH ? "HIGH" : "LOW");
         Serial1.print("Login Status: "); Serial1.println(sys.isLoggedIn ? "LOGGED IN" : "NOT LOGGED IN");
         Serial1.println("=============================");
     }
@@ -475,6 +470,7 @@ class BELTCutterManager {
     bool hasRetried = false; // 재시도 여부
     int lastSwitchState = LOW; // 이전 스위치 상태
     int lastSensorState = HIGH; // 이전 센서 상태
+    bool waitingForSwitch = false; // 스위치 입력 대기 모드
 
     // -----------------------------------------------------
     // 타이머 상수
@@ -499,13 +495,17 @@ public:
         if (!sys.isLoggedIn) return;
         
         // 완료 후 실행 중이 아니면 무시
-        if (sys.BELTCutterDone && !isRunning) return;
+        if (sys.BELTCutterDone && !isRunning && !waitingForSwitch) return;
 
         int switchState = digitalRead(Pin::BELT_SWITCH);
         int currentSensorState = digitalRead(Pin::BELT_SENSOR);
 
-        // 스위치 상승 엣지 감지 (페트병 투입)
+        // 스위치 상승 엣지 감지 (페트병 투입 또는 스위치 대기 모드)
         if (switchState == HIGH && lastSwitchState == LOW && !isRunning) {
+            if (waitingForSwitch) {
+                Serial1.println("Switch detected - BELT motor starting...");
+                waitingForSwitch = false;
+            }
             startMotor();
         }
         // 동작 중일 경우 런타임 처리
@@ -547,17 +547,41 @@ public:
         // 스위치 입력 대기
         int localLastSwitch = LOW;
         while(true) {
-             int sw = digitalRead(Pin::BELT_SWITCH);
-             if (sw == LOW && localLastSwitch == HIGH) { // 상승 엣지
-                 break;
-             }
-             localLastSwitch = sw;
-             delay(10);
+            globalCheckSerial();
+            int sw = digitalRead(Pin::BELT_SWITCH);
+            if (sw == HIGH && localLastSwitch == LOW) break;
+            localLastSwitch = sw;
+            delay(10);
         }
         
         Serial1.println("BELT motor started (switch)");
         runBlockingCycle();
     }
+    
+    // -----------------------------------------------------
+    // 띠 분리기 스위치 대기 모드로 전환
+    // - 비블로킹: update()에서 스위치 감지 시 자동 동작
+    // -----------------------------------------------------
+    void resetAndWaitSwitch() {
+        if (!sys.isLoggedIn) {
+            Serial1.println("Login required.");
+            return;
+        }
+        if (isRunning) {
+            Serial1.println("BELT motor already running.");
+            return;
+        }
+        
+        // 상태 초기화
+        sys.BELTCutterDone = false;
+        sys.BELTOpenTriggered = false;
+        sys.BELTManualTrigger = false;
+        waitingForSwitch = true;
+        lastSwitchState = digitalRead(Pin::BELT_SWITCH);
+        
+        Serial1.println("BELT cutter ready - waiting for switch press...");
+    }
+    
     // -----------------------------------------------------
     // 띠 분리기 동작 사이클
     // -----------------------------------------------------
@@ -815,30 +839,40 @@ public:
     // - 일정 시간 초과 시 끼임으로 판단
     // =====================================================
     void runMotor1() { 
-        LED::blinkBlue();
-        // Sensor2가 HIGH 일 경우 아직 감지 안됨
-        if (digitalRead(Pin::SENSOR_AI_ZONE_2) == HIGH) {
-            Serial1.println("Sensor2 HIGH. Running 24V Direction 1...");
-            unsigned long start = millis();
-            unsigned long retryTime = 3000; // 끼임 판단 기준 시간
+        Serial1.println("Running 24V Direction 1 (AI_ZONE_BACK)...");
+        unsigned long start = millis();
+        int sensorHitCount = 0; // 센서 감지 횟수
+        int lastSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1); // 이전 센서 상태
+        
+        // Sensor1에 2번 닿을 때까지 반복
+        while(true) {
+            globalCheckSerial();    // 에러 체크
+            motor24V.runBackward(sys.speed_D1); //24V 모터 상승
+            delay(50);
             
-            // Sensor2 감지까지 반복
-            while(digitalRead(Pin::SENSOR_AI_ZONE_2) == HIGH) {
-                globalCheckSerial();    // 시리얼 명령 및 에러 체크
-                motor24V.runBackward(sys.speed_D1); // 24V 모터 하강
-                delay(50);
+            // 센서 상태 확인
+            int currentSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1);
+            
+            // HIGH -> LOW 전환 감지 (센서에 닿음)
+            if (lastSensorState == HIGH && currentSensorState == LOW) {
+                sensorHitCount++;
+                Serial1.print("Sensor1 hit count: ");
+                Serial1.println(sensorHitCount);
                 
-                // 끼임 감지 - 시간 초과
-                if (millis() - start > retryTime) {
-                    Serial1.println("Jam detected. Running Motor2 to unjam...");
-                    runMotor2(); // 반대 방향으로 이동하여 끼임 해제 시도
-                    break;
-                }
-                digitalWrite(Pin::LED_BLUE, HIGH); // 동작 표시
+                // 2번째 감지 시 멈춤
+                if (sensorHitCount >= 2) break;
             }
-            if(!sys.isError) Serial1.println("Sensor2 reached (LOW)."); // 정상 도달
+            
+            lastSensorState = currentSensorState; // 상태 업데이트
+            
+            // 타임아웃
+            if (millis() - start > 15000) {
+                ErrorHandler::trigger("Motor1 Timeout");
+                break;
+            }
         }
-        motor24V.stop(); // 모터 정지
+        if(!sys.isError) Serial1.println("Sensor2 reached (LOW)."); // 정상 도달
+        motor24V.stop();// 모터 정지
     }
 
     // =====================================================
@@ -872,18 +906,33 @@ public:
     }
     void runMotor3() { 
         Serial1.println("Running 24V Direction 2 (AI_ZONE_RETURN)...");
-        const unsigned long IGNORE_MS = 300; // 초기 센서 무시 시간
         unsigned long start = millis();
-        // Sensor1 감지까지 반복 (초기 감지 여부 무관하게 항상 진입)
+        int sensorHitCount = 0; // 센서 감지 횟수
+        int lastSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1); // 이전 센서 상태
+        
+        // Sensor1에 2번 닿을 때까지 반복
         while(true) {
             globalCheckSerial();    // 에러 체크
-            unsigned long elapsed = millis() - start;
             motor24V.runForward(sys.speed_D2); //24V 모터 상승
             delay(50);
-            // 초기 센서 무시 시간 이후 Sensor1 확인
-            if (elapsed > IGNORE_MS && digitalRead(Pin::SENSOR_AI_ZONE_1) == LOW) break;
+            
+            // 센서 상태 확인
+            int currentSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1);
+            
+            // HIGH -> LOW 전환 감지 (센서에 닿음)
+            if (lastSensorState == HIGH && currentSensorState == LOW) {
+                sensorHitCount++;
+                Serial1.print("Sensor1 hit count: ");
+                Serial1.println(sensorHitCount);
+                
+                // 2번째 감지 시 멈춤
+                if (sensorHitCount >= 2) break;
+            }
+            
+            lastSensorState = currentSensorState; // 상태 업데이트
+            
             // 타임아웃
-            if (elapsed > 15000) {
+            if (millis() - start > 15000) {
                 ErrorHandler::trigger("Motor2 Timeout");
                 break;
             }
@@ -1010,8 +1059,6 @@ void globalStop() {
     sys.BELTOpenTriggered = false;
     sys.BELTManualTrigger = false;
     sys.isError = false;    // 에러 상태 해제
-    sys.photoClearSent = false;         // 포토센서 CLEAR 상태 초기화
-    sys.photoLastDetectedMs = 0;
     // 상태 안내 메세지
     Serial1.println("STATUS:STOPPED_LOGGED_OUT");
     Serial1.println("INFO:LOGIN_REQUIRED");
@@ -1103,7 +1150,7 @@ public:
         if (cmd == "HELP")             { sendAck(cmd); showHelp(true); return true; }
         if (cmd == "REPAIR")           { sendAck(cmd); AI_ZONE.repairMode(); return true; }
         if (cmd == "LOGOUT")           { sendAck(cmd); globalStop(); return true; }
-        if (cmd == "BELT_CUT")        { sendAck(cmd); BELTCutter.manualTrigger(); return true; }
+        if (cmd == "BELT_CUT")        { sendAck(cmd); BELTCutter.resetAndWaitSwitch(); return true; }
         if (cmd == "BELT_RETRY")      { sendAck(cmd); BELTCutter.retryTrigger(); return true; }
         if (cmd == "CONFIG_REVERSE")   { sendAck(cmd); InverterController::setRevMode(!sys.isReverseMode); return true; }
         if (cmd == "INVERTER_OFF")     { sendAck(cmd); InverterController::disable(); return true; }
@@ -1236,38 +1283,6 @@ void globalCheckSerial() {
 // - faduino 프로그램 시작 지점
 // =========================================================
 
-// =========================================================
-// PhotoClearMonitor
-// - 핀 21 오토닉스 포토센서 모니터링
-// - 로그인 상태에서 사물이 2초 이상 미감지 시 CLEAR 전송
-// - 재감지 시 CLEAR 전송 스래 재설정
-// =========================================================
-namespace PhotoClearMonitor {
-    static void update() {
-        if (!sys.isLoggedIn) return;
-
-        if (Sensors::isPhotoDetected()) {
-            // 사물 감지 중: 마지막 감지 시각 갱신, CLEAR 전송 초기화
-            sys.photoLastDetectedMs = millis();
-            sys.photoClearSent = false;
-        } else {
-            // 미감지: 한 번이라도 감지된 적 있고, 2초 경과, 아직 전송 안 한 경우
-            if (sys.photoLastDetectedMs > 0
-                && !sys.photoClearSent
-                && (millis() - sys.photoLastDetectedMs >= 2000)) {
-                Serial1.println("CLEAR");
-                sys.photoClearSent = true;
-            }
-        }
-    }
-
-    // 로그인/로그아웃 시 상태 초기화
-    static void reset() {
-        sys.photoClearSent = false;
-        sys.photoLastDetectedMs = 0;
-    }
-}
-
 void setup() {
     // 시리얼 통신 초기화 (외부 제어 / 웹 연동)
     Serial1.begin(9600);
@@ -1296,13 +1311,7 @@ void loop() {
     BELTCutter.update();
 
     // -----------------------------------------------------
-    // 2. 포토센서 CLEAR 모니터링
-    // - 2초 이상 미감지 시 CLEAR 메세지 전송
-    // -----------------------------------------------------
-    PhotoClearMonitor::update();
-
-    // -----------------------------------------------------
-    // 3. 띠 분리 완료 후 도어 자동 개방 트리거
+    // 2. 띠 분리 완료 후 도어 자동 개방 트리거
     // -----------------------------------------------------
     if (sys.BELTCutterDone && !sys.BELTOpenTriggered && !sys.BELTManualTrigger) {
         Serial1.println("Door will opened..");
@@ -1311,7 +1320,7 @@ void loop() {
     }
 
     // -----------------------------------------------------
-    // 4. 시리얼 명령 처리
+    // 3. 시리얼 명령 처리
     // -----------------------------------------------------
     CommandProcessor::processInput();
 }
