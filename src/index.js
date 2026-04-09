@@ -1079,6 +1079,9 @@ function showScreen(screenId) {
             </div>
         `;
 
+        // TTS 음성 안내
+        speakText('포인트 적립 중입니다. 참여해 주셔서 감사합니다.');
+
         // 카운트다운
         const countdownText = document.getElementById('end-countdown');
         countdownInterval = setInterval(() => {
@@ -1346,6 +1349,9 @@ function showErrorScreen(message) {
     if (phoneEl) phoneEl.textContent = `입력한 전화번호: ${currentPhoneNumber || '-'}`;
     showScreen('error-screen');
 
+    // TTS 음성 안내
+    speakText('기기 오류가 발생했습니다. 관리자에게 문의해 주세요. 고객센터 전화번호는 1644-1224 입니다.');
+
     const callBtn = document.getElementById('call-support');
     if (callBtn) {
         // 표시만 하고 클릭 불가
@@ -1405,6 +1411,34 @@ const processBgColors = [
     '#f0f6ff', // 판별중
     '#f3f7ff', // 수집중
 ];
+
+// ========== TTS (Text-to-Speech) 기능 ==========
+function speakText(text) {
+    try {
+        // 기존 음성 중지
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+
+        // HTML 태그 제거
+        const cleanText = text
+            .replace(/<br\s*\/?>/gi, ' ')
+            .replace(/<[^>]*>/g, '')
+            .trim();
+
+        if (!cleanText) return;
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'ko-KR'; // 한국어
+        utterance.rate = 1.0; // 속도
+        utterance.pitch = 1.0; // 음높이
+        utterance.volume = 1.0; // 볼륨 최대
+
+        window.speechSynthesis.speak(utterance);
+    } catch (e) {
+        console.error('TTS 오류:', e);
+    }
+}
 
 // 아이콘 + 메시지 + 배경 렌더링
 function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' } = {}) {
@@ -1470,6 +1504,9 @@ function renderProcess(iconKey, message, bgIndex, { spin = false, iconAlt = '' }
         } else {
             hideBottomArrow();
         }
+
+        // TTS 음성 안내
+        speakText(message);
     } catch (e) {
         // 렌더링 실패 시 텍스트만 표시하기
         processMessage.textContent = message;
@@ -1505,6 +1542,9 @@ function renderOpenDoorOriginal(messageHtml) {
     const fill = document.getElementById('process-progress-fill');
     console.log('renderOpenDoorOriginal - fill element:', fill);
     if (fill) fill.style.width = '30%';
+
+    // TTS 음성 안내
+    speakText(messageHtml);
 }
 
 function renderCloseDoorOriginal(messageText) {
@@ -1524,6 +1564,9 @@ function renderCloseDoorOriginal(messageText) {
     }
     const fill = document.getElementById('process-progress-fill');
     if (fill) fill.style.width = '50%';
+
+    // TTS 음성 안내
+    speakText(messageText);
 }
 
 // 버튼 충돌 방지 버튼 숨김
@@ -2196,6 +2239,9 @@ function waitForSensor2WithJamDetection({ timeoutMs = 30000 } = {}) {
                             </button>
                         </div>
                     `;
+
+                    // TTS 음성 안내
+                    speakText('페트병이 끼였습니다. 페트병을 더 깊게 넣어주세요.');
 
                     // 화면 전환
                     document.querySelectorAll('.screen').forEach((s) => (s.style.display = 'none'));
