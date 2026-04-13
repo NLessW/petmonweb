@@ -243,6 +243,44 @@
             </div>
         </div>
 
+        <!-- Manager Repair PIN 팝업 (4자리) -->
+        <div id="manager-repair-pin-popup" class="pin-modal">
+            <div class="pin-content" role="dialog" aria-modal="true" aria-labelledby="repair-pin-title">
+                <h2 id="repair-pin-title">수리 관리자 비밀번호</h2>
+                <p class="pin-desc">비밀번호를 입력하세요</p>
+                <input
+                    id="manager-repair-pin-input"
+                    type="password"
+                    inputmode="numeric"
+                    maxlength="4"
+                    autocomplete="one-time-code"
+                />
+                <p class="pin-desc" style="margin-top: 6px; font-size: 0.9em; color: #888">
+                    무단 접속 시 법적으로 처벌받을 수 있습니다.
+                </p>
+
+                <div class="pin-keypad" aria-label="수리 관리자 키패드">
+                    <button data-k="1">1</button>
+                    <button data-k="2">2</button>
+                    <button data-k="3">3</button>
+                    <button data-k="4">4</button>
+                    <button data-k="5">5</button>
+                    <button data-k="6">6</button>
+                    <button data-k="7">7</button>
+                    <button data-k="8">8</button>
+                    <button data-k="9">9</button>
+                    <button data-k="del" class="pin-key">←</button>
+                    <button data-k="0">0</button>
+                    <button data-k="clr" class="pin-key">C</button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 10px">
+                    <button id="manager-repair-pin-cancel" class="pin-secondary">취소</button>
+                    <button id="manager-repair-pin-submit" class="pin-primary">확인</button>
+                </div>
+                <div id="manager-repair-pin-error" style="margin-top: 10px; color: #ffb4b4; min-height: 1.2em"></div>
+            </div>
+        </div>
+
         <div id="admin-toolbar">
             <div id="test-controls">
                 <span id="test-mode-badge">테스트모드: OFF</span>
@@ -322,6 +360,7 @@
         <script src="./src/adminPin.js"></script>
         <script src="./src/adminTriggers.js"></script>
         <script src="./src/secretExit.js"></script>
+        <script src="./src/managerRepairTrigger.js"></script>
         <script src="./src/hotkeys.js"></script>
         <script>
             document.addEventListener('keydown', function (e) {
