@@ -852,6 +852,46 @@ const SENSOR_MAP = [
 ];
 
 function handleSensorLine(line) {
+    // === 실시간 센서 변화 메시지 처리 (BELT_MANUAL 동작 중) ===
+    // "Belt Sensor (Pin 25) changed: HIGH (Normal) at 1234ms"
+    // "Belt Sensor (Pin 25) initial: HIGH (Normal)"
+    // "Belt Sensor (Pin 25) final: HIGH (Normal)"
+    if (line.includes('Belt Sensor (Pin 25)')) {
+        const colonIdx = line.lastIndexOf(':');
+        if (colonIdx !== -1) {
+            // "HIGH (Normal) at 1234ms" 또는 "HIGH (Normal)" 형식
+            const valueText = line
+                .slice(colonIdx + 1)
+                .trim()
+                .split(' at ')[0]; // " at 1234ms" 제거
+            const isHigh = valueText.includes('HIGH');
+            const st = isHigh ? 'ok' : 'warn';
+            const lbl = isHigh ? '정상' : '이상';
+
+            const dot = document.getElementById('sd-belt');
+            const val = document.getElementById('sv-belt');
+            if (dot) {
+                dot.className = 'sensor-dot ' + st;
+                // 실시간 변화 시각적 효과 (깜빡임)
+                dot.style.transition = 'none';
+                dot.style.opacity = '0.3';
+                setTimeout(() => {
+                    dot.style.transition = 'all 0.3s';
+                    dot.style.opacity = '1';
+                }, 50);
+            }
+            if (val) {
+                val.textContent = lbl;
+                val.className = 'sensor-value ' + st;
+            }
+
+            // 타임스탬프 업데이트
+            updateSensorTimestamp();
+            return;
+        }
+    }
+
+    // === 기존 센서 상태 블록 처리 (GET_STATUS 응답) ===
     for (const entry of SENSOR_MAP) {
         if (entry.pattern.test(line)) {
             const colonIdx = line.indexOf(':');

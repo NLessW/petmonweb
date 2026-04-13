@@ -415,6 +415,7 @@ public:
         Serial1.print("Door Close Sensor (Pin 36): "); Serial1.println(digitalRead(Pin::SENSOR_DOOR_CLOSE) == HIGH ? "HIGH (Door Closed)" : "LOW (Door Open)");
         Serial1.print("Hand Sensor (Pin 22): "); Serial1.println(digitalRead(Pin::SENSOR_HAND) == HIGH ? "HIGH (Hand Detected)" : "LOW (No Hand)");
         Serial1.print("Belt Senser (Pin 25): "); Serial1.println(digitalRead(Pin::BELT_SENSOR) == HIGH ? "HIGH (Normal)" : "LOW (Abnormal)");
+        Serial1.print("Belt Light Sensor (Pin 24): ") ; Serial1.println(digitalRead(Pin::BELT_SWITCH) == HIGH ? "HIGH (Switch ON)" : "LOW (Switch OFF)");
         Serial1.print("MC12B Enable Sensor50 (Pin 50): "); Serial1.println(digitalRead(50) == HIGH ? "HIGH" : "LOW");
         Serial1.print("MC12B Enable Sensor51 (Pin 51): "); Serial1.println(digitalRead(Pin::INVERTER_ENABLE) == HIGH ? "HIGH" : "LOW");
         Serial1.print("Inverter REV Sensor (Pin 39): "); Serial1.println(digitalRead(Pin::INVERTER_REV) == HIGH ? "HIGH" : "LOW");
@@ -839,40 +840,30 @@ public:
     // - 일정 시간 초과 시 끼임으로 판단
     // =====================================================
     void runMotor1() { 
-        Serial1.println("Running 24V Direction 1 (AI_ZONE_BACK)...");
-        unsigned long start = millis();
-        int sensorHitCount = 0; // 센서 감지 횟수
-        int lastSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1); // 이전 센서 상태
-        
-        // Sensor1에 2번 닿을 때까지 반복
-        while(true) {
-            globalCheckSerial();    // 에러 체크
-            motor24V.runBackward(sys.speed_D1); //24V 모터 상승
-            delay(50);
+        //LED::blinkBlue();
+        // Sensor2가 HIGH 일 경우 아직 감지 안됨
+        if (digitalRead(Pin::SENSOR_AI_ZONE_2) == HIGH) {
+            Serial1.println("Sensor2 HIGH. Running 24V Direction 1...");
+            unsigned long start = millis();
+            unsigned long retryTime = 3000; // 끼임 판단 기준 시간
             
-            // 센서 상태 확인
-            int currentSensorState = digitalRead(Pin::SENSOR_AI_ZONE_1);
-            
-            // HIGH -> LOW 전환 감지 (센서에 닿음)
-            if (lastSensorState == HIGH && currentSensorState == LOW) {
-                sensorHitCount++;
-                Serial1.print("Sensor1 hit count: ");
-                Serial1.println(sensorHitCount);
+            // Sensor2 감지까지 반복
+            while(digitalRead(Pin::SENSOR_AI_ZONE_2) == HIGH) {
+                globalCheckSerial();    // 시리얼 명령 및 에러 체크
+                motor24V.runBackward(sys.speed_D1); // 24V 모터 하강
+                delay(50);
                 
-                // 2번째 감지 시 멈춤
-                if (sensorHitCount >= 2) break;
+                // 끼임 감지 - 시간 초과
+                if (millis() - start > retryTime) {
+                    Serial1.println("Jam detected. Running Motor2 to unjam...");
+                    runMotor2(); // 반대 방향으로 이동하여 끼임 해제 시도
+                    break;
+                }
+                digitalWrite(Pin::LED_BLUE, HIGH); // 동작 표시
             }
-            
-            lastSensorState = currentSensorState; // 상태 업데이트
-            
-            // 타임아웃
-            if (millis() - start > 15000) {
-                ErrorHandler::trigger("Motor1 Timeout");
-                break;
-            }
+            if(!sys.isError) Serial1.println("Sensor2 reached (LOW)."); // 정상 도달
         }
-        if(!sys.isError) Serial1.println("Sensor2 reached (LOW)."); // 정상 도달
-        motor24V.stop();// 모터 정지
+        motor24V.stop(); // 모터 정지
     }
 
     // =====================================================
@@ -1151,6 +1142,7 @@ public:
         if (cmd == "REPAIR")           { sendAck(cmd); AI_ZONE.repairMode(); return true; }
         if (cmd == "LOGOUT")           { sendAck(cmd); globalStop(); return true; }
         if (cmd == "BELT_CUT")        { sendAck(cmd); BELTCutter.resetAndWaitSwitch(); return true; }
+        if (cmd == "BELT_MANUAL")     { sendAck(cmd); BELTCutter.manualTrigger(); return true; }
         if (cmd == "BELT_RETRY")      { sendAck(cmd); BELTCutter.retryTrigger(); return true; }
         if (cmd == "CONFIG_REVERSE")   { sendAck(cmd); InverterController::setRevMode(!sys.isReverseMode); return true; }
         if (cmd == "INVERTER_OFF")     { sendAck(cmd); InverterController::disable(); return true; }
