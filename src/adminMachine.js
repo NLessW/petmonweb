@@ -832,6 +832,12 @@ const SENSOR_MAP = [
         label: (v) => (v.includes('Abnormal') ? '이상' : '정상'),
     },
     {
+        pattern: /Belt Light Sensor/i,
+        id: 'belt-switch',
+        state: (v) => (v.includes('Switch ON') ? 'active' : 'idle'),
+        label: (v) => (v.includes('Switch ON') ? 'ON' : 'OFF'),
+    },
+    {
         pattern: /Photo Sensor/i,
         id: 'photo',
         state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
