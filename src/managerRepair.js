@@ -248,9 +248,19 @@ async function autoConnect() {
         let selectedPort = null;
 
         if (ports.length === 0) {
-            // 포트가 없으면 새로 권한 요청
+            // 포트가 없으면 새로 권한 요청 (Prolific PL2303 우선, 없으면 전체 표시)
             appendLog('포트 선택 창을 엽니다...', 'info');
-            selectedPort = await navigator.serial.requestPort();
+            try {
+                // 먼저 Prolific PL2303 필터로 시도
+                selectedPort = await navigator.serial.requestPort({
+                    filters: [{ usbVendorId: 0x067b, usbProductId: 0x2303 }],
+                });
+                appendLog('Prolific PL2303 포트 선택됨', 'info');
+            } catch (e) {
+                // 필터에 맞는 장치가 없으면 모든 포트 표시
+                appendLog('Prolific PL2303 장치 없음 - 모든 포트 표시', 'info');
+                selectedPort = await navigator.serial.requestPort();
+            }
         } else if (ports.length === 1) {
             // 포트가 하나면 자동 선택
             selectedPort = ports[0];
