@@ -1834,20 +1834,9 @@ async function startProcess() {
     const __pf = document.getElementById('process-progress-fill');
     if (__pf) __pf.style.width = '10%';
 
-    let openOrStopped;
+    // 띠 분리 완료 대기
     try {
-        openOrStopped = await waitForAnyArduinoResponse(
-            [
-                'Belt cutting done!',
-                'Belt cutting done',
-                'Door will opened',
-                'Door will open',
-                'Door opened',
-                'Door open',
-                // 'Motor stopped.' 제거
-            ],
-            { timeoutMs: 60000 },
-        );
+        await waitForAnyArduinoResponse(['Belt cutting done!', 'Belt cutting done'], { timeoutMs: 60000 });
     } catch (err) {
         if (handleDeviceLost(err)) return;
 
@@ -1869,6 +1858,16 @@ async function startProcess() {
 
         // 기타 예외는 기존대로 에러 화면
         showErrorScreen('기기 오류가 발생했습니다. 관리자에게 문의해주세요.');
+        takePhotoAndSave('err_');
+        return;
+    }
+
+    // 띠 분리 완료 후 문 열기 명령 전송
+    try {
+        await writeCmdWithAck('DOOR_OPEN');
+    } catch (err) {
+        if (handleDeviceLost(err)) return;
+        showErrorScreen('문 열기 실패. 관리자에게 문의해주세요.');
         takePhotoAndSave('err_');
         return;
     }
@@ -3067,6 +3066,14 @@ addMoreButton.addEventListener('click', async () => {
     // 추가 투입 시 상태 초기화 후 처음부터 다시 시작
     isStopped = false;
     stopButton.disabled = false;
+
+    // 띠 분리기 상태 초기화 (BELTCutterDone을 false로)
+    try {
+        await writeCmdWithAck('BELT_CUT');
+    } catch (e) {
+        console.error('띠 분리기 초기화 실패:', e);
+    }
+
     await startProcess();
 });
 
