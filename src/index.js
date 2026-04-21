@@ -1830,7 +1830,7 @@ async function startProcess() {
     if (closeDoorButton.parentNode) closeDoorButton.parentNode.removeChild(closeDoorButton);
     closeDoorButton.disabled = false;
 
-    renderProcess('label', '띠를 먼저 분리해주세요.<br>분리하시면 문이 열립니다.', 2);
+    renderProcess('label', '띠를 먼저 분리해주세요.<br>분리하시면 투입구가 열립니다.', 2);
     const __pf = document.getElementById('process-progress-fill');
     if (__pf) __pf.style.width = '10%';
 
@@ -1873,7 +1873,7 @@ async function startProcess() {
     }
 
     // 문 열림 안내
-    const openMsg = `문이 열립니다.<br>띠를 제거한 페트병을 투입해주세요.<br>마지막으로 닫기 버튼을 눌러주세요.`;
+    const openMsg = `투입구가 열립니다.<br>띠를 제거한 페트병을 <strong style="color: yellow;">병목</strong>부터 투입해주세요.<br>마지막으로 닫기 버튼을 눌러주세요.`;
     renderOpenDoorOriginal(openMsg);
 
     // "작동중지" 버튼 옆에 "닫힘" 버튼 추가
