@@ -1,13 +1,62 @@
-// 관리자 메세지 모달 트리거 키 ctrl+i
+// 모달 상태 추적
+let isMessageLocked = false;
+
+// 모달 초기화 함수
+function resetMessageModal() {
+    const input = document.getElementById('admin-message-input');
+    const closeBtn = document.getElementById('admin-message-close-btn');
+
+    input.value = '';
+    input.readOnly = false;
+    closeBtn.style.display = 'none';
+    isMessageLocked = false;
+}
+
+// 관리자 메세지 모달 트리거 키 ctrl+i (열기/닫기)
 document.addEventListener('keydown', function (e) {
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'i') {
         const modal = document.getElementById('admin-message-modal');
         if (modal.style.display === 'none' || modal.style.display === '') {
+            resetMessageModal(); // 모달 열 때 초기화
             modal.style.display = 'flex';
             document.getElementById('admin-message-input').focus();
         } else {
             modal.style.display = 'none';
+            resetMessageModal(); // 모달 닫을 때도 초기화
         }
+    }
+
+    // Alt+I: 메시지 잠금/해제 토글
+    if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'i') {
+        const modal = document.getElementById('admin-message-modal');
+        // 모달이 열려있을 때만 작동
+        if (modal.style.display === 'flex') {
+            e.preventDefault();
+            const input = document.getElementById('admin-message-input');
+            const closeBtn = document.getElementById('admin-message-close-btn');
+
+            isMessageLocked = !isMessageLocked;
+
+            if (isMessageLocked) {
+                // 잠금: 텍스트 수정 불가, 닫기 버튼 표시
+                input.readOnly = true;
+                closeBtn.style.display = 'block';
+            } else {
+                // 해제: 텍스트 수정 가능, 닫기 버튼 숨김
+                input.readOnly = false;
+                closeBtn.style.display = 'none';
+                input.focus();
+            }
+        }
+    }
+});
+
+// 닫기 버튼 클릭 이벤트
+document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'admin-message-close-btn') {
+        const modal = document.getElementById('admin-message-modal');
+        modal.style.display = 'none';
+        resetMessageModal();
     }
 });
 
@@ -37,7 +86,7 @@ document.addEventListener('keydown', function (e) {
 
                 const savedMessages = JSON.parse(
                     localStorage.getItem('adminSavedMessages') ||
-                        '["페트병을 깊숙히 넣어주세요.", "창을 닫아드리면 다시 시도해보세요."]'
+                        '["페트병을 깊숙히 넣어주세요.", "창을 닫아드리면 다시 시도해보세요."]',
                 );
 
                 if (savedMessages[index]) {

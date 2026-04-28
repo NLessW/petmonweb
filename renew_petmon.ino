@@ -495,8 +495,8 @@ public:
         // 로그인 상태가 아니면 동작 안하도록 설정
         if (!sys.isLoggedIn) return;
         
-        // 완료 후 실행 중이 아니면 무시
-        if (sys.BELTCutterDone && !isRunning && !waitingForSwitch) return;
+        // BELTCutterDone이 true이고 작동중이 아니면 스위치 무시 (추가투입 대기)
+        if (sys.BELTCutterDone && !isRunning) return;
 
         int switchState = digitalRead(Pin::BELT_SWITCH);
         int currentSensorState = digitalRead(Pin::BELT_SENSOR);
@@ -560,6 +560,62 @@ public:
     }
     
     // -----------------------------------------------------
+    // 띠 분리기 수리 모드
+    // - 5회 반복: 3초 ON → 1초 OFF
+    // - 이후 BELT_MANUAL 로직 실행 (센서 LOW 감지)
+    // -----------------------------------------------------
+    void beltRepairMode() {
+        if (!sys.isLoggedIn) {
+            Serial1.println("Login required for repair mode.");
+            return;
+        }
+        
+        Serial1.println("=== BELT Repair Mode Started ===");
+        
+        // 1단계: 5회 반복 (3초 ON → 1초 OFF)
+        for (int i = 0; i < 5; i++) {
+            Serial1.print("Repair cycle ");
+            Serial1.print(i + 1);
+            Serial1.println("/5 - Motor ON");
+            
+            digitalWrite(Pin::BELT_MOTOR, HIGH);
+            
+            // 3초 대기 (시리얼 체크 포함)
+            for (int j = 0; j < 30; j++) {
+                globalCheckSerial();
+                if (sys.isError) {
+                    digitalWrite(Pin::BELT_MOTOR, LOW);
+                    Serial1.println("Repair mode interrupted by error.");
+                    return;
+                }
+                delay(100);
+            }
+            
+            digitalWrite(Pin::BELT_MOTOR, LOW);
+            Serial1.println("Motor OFF - waiting 1 second");
+            
+            // 1초 대기
+            for (int j = 0; j < 10; j++) {
+                globalCheckSerial();
+                delay(100);
+            }
+        }
+        
+        Serial1.println("Pulse cycles complete - starting BELT_MANUAL detection");
+        
+        // 2단계: BELT_MANUAL 로직 실행 (runBlockingCycle)
+        // - 센서 LOW 감지 시 정상 종료
+        // - 타임아웃 시에도 에러로 전환하지 않음
+        sys.BELTManualTrigger = true;
+        sys.BELTCutterDone = false;
+        sys.BELTOpenTriggered = false;
+        
+        runBlockingCycle();
+        
+        Serial1.println("=== BELT Repair Mode Finished ===");
+    }
+    
+    // -----------------------------------------------------
     // 띠 분리기 스위치 대기 모드로 전환
     // - 비블로킹: update()에서 스위치 감지 시 자동 동작
     // -----------------------------------------------------
@@ -588,15 +644,30 @@ public:
     // -----------------------------------------------------
     void runBlockingCycle() {
         digitalWrite(Pin::BELT_MOTOR, HIGH);
+        Serial1.println("BELT motor ON - monitoring sensor...");
         unsigned long mStart = millis();
         int lastSens = digitalRead(Pin::BELT_SENSOR);
         bool detached = false;
         motorStarted = true;
         isRunning = true; // 전역 상태 체크
+        
+        // 초기 센서 상태 출력
+        Serial1.print("Belt Sensor (Pin 25) initial: ");
+        Serial1.println(lastSens == HIGH ? "HIGH (AbNormal)" : "LOW (Normal)");
 
         while(true) {
             int curSens = digitalRead(Pin::BELT_SENSOR);
             unsigned long elap = millis() - mStart;
+            
+            // 센서 상태 변화 감지 시 즉시 출력
+            if (curSens != lastSens) {
+                Serial1.print("Belt Sensor (Pin 25) changed: ");
+                Serial1.print(curSens == HIGH ? "HIGH (Normal)" : "LOW (Abnormal)");
+                Serial1.print(" at ");
+                Serial1.print(elap);
+                Serial1.println("ms");
+            }
+            
             // 초기 센서 안정화 시간 이후 적용
             if (elap > SENSOR_IGNORE_MS) {
                 if (curSens == LOW) detached = true;    
@@ -604,9 +675,8 @@ public:
                 if (detached && lastSens == LOW && curSens == HIGH) {
                     digitalWrite(Pin::BELT_MOTOR, LOW);
                     Serial1.println("BELT cutting done - cycle complete");
-                    // 자동 / 수동 동작 완료 구분 플래그
-                    if (sys.BELTManualTrigger) sys.BELTCutterDone = false; 
-                    else sys.BELTCutterDone = true;
+                    // 띠 분리 완료 - runMotor2() 완료 시까지 true 유지
+                    sys.BELTCutterDone = true;
                     break;
                 }
             }
@@ -620,6 +690,11 @@ public:
             lastSens = curSens;
             delay(10);
         }
+        
+        // 최종 센서 상태 출력
+        Serial1.print("Belt Sensor (Pin 25) final: ");
+        Serial1.println(digitalRead(Pin::BELT_SENSOR) == HIGH ? "HIGH (Normal)" : "LOW (Abnormal)");
+        
         // 상태 복구
         motorStarted = false;
         isRunning = false;
@@ -638,7 +713,6 @@ private:
         startMs = millis();
         digitalWrite(Pin::BELT_MOTOR, HIGH);
         Serial1.println("BELT motor started - cutting");
-        sys.BELTCutterDone = false;
         sys.BELTManualTrigger = false;
     }
     // -----------------------------------------------------
@@ -891,7 +965,7 @@ public:
         motor24V.stop();// 모터 정지
         
         // 사이클 종료 후 띠 분리기 관련 상태 초기화
-        sys.BELTCutterDone = false;
+        //sys.BELTCutterDone = false;
         sys.BELTOpenTriggered = false;
         sys.BELTManualTrigger = false;
     }
@@ -1143,6 +1217,7 @@ public:
         if (cmd == "LOGOUT")           { sendAck(cmd); globalStop(); return true; }
         if (cmd == "BELT_CUT")        { sendAck(cmd); BELTCutter.resetAndWaitSwitch(); return true; }
         if (cmd == "BELT_MANUAL")     { sendAck(cmd); BELTCutter.manualTrigger(); return true; }
+        if (cmd == "BELT_REPAIR")    { sendAck(cmd); BELTCutter.beltRepairMode(); return true; }
         if (cmd == "BELT_RETRY")      { sendAck(cmd); BELTCutter.retryTrigger(); return true; }
         if (cmd == "CONFIG_REVERSE")   { sendAck(cmd); InverterController::setRevMode(!sys.isReverseMode); return true; }
         if (cmd == "INVERTER_OFF")     { sendAck(cmd); InverterController::disable(); return true; }
@@ -1172,6 +1247,7 @@ public:
         sys.isLoggedIn = true;
         sys.isAdmin = admin;
         sys.isError = false;
+        sys.BELTCutterDone = false;
         sys.BELTManualTrigger = false;
         Serial1.println(admin ? "INFO:LOGIN_ADMIN_SUCCESS" : "INFO:LOGIN_USER_SUCCESS");
         Serial1.println("INFO:ERROR_STATE_CLEARED");
@@ -1303,16 +1379,7 @@ void loop() {
     BELTCutter.update();
 
     // -----------------------------------------------------
-    // 2. 띠 분리 완료 후 도어 자동 개방 트리거
-    // -----------------------------------------------------
-    if (sys.BELTCutterDone && !sys.BELTOpenTriggered && !sys.BELTManualTrigger) {
-        Serial1.println("Door will opened..");
-        door.open(true);    // MC-12B 및 FA-50 + 투입구 개방
-        sys.BELTOpenTriggered = true;   // 중복 방지
-    }
-
-    // -----------------------------------------------------
-    // 3. 시리얼 명령 처리
+    // 2. 시리얼 명령 처리
     // -----------------------------------------------------
     CommandProcessor::processInput();
 }
