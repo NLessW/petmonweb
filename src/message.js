@@ -86,7 +86,7 @@ document.addEventListener('keydown', function (e) {
 
                 const savedMessages = JSON.parse(
                     localStorage.getItem('adminSavedMessages') ||
-                        '["페트병을 깊숙히 넣어주세요.", "창을 닫아드리면 다시 시도해보세요."]',
+                        '["페트병이 띠 분리기에 걸려있습니다.\\n손으로 빠지는 상태이니 페트병을 빼고 닫기 버튼을 눌러주신 뒤 시작해주시면 됩니다.","페트병을 깊숙히 넣어주세요.", "창을 닫아드리면 다시 시도해보세요."]',
                 );
 
                 if (savedMessages[index]) {
