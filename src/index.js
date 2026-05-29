@@ -385,7 +385,6 @@ async function writeCmdWithAck(cmd, timeoutMs = 3000) {
         // ACK:CMD 또는 NACK:CMD:... 형태 응답 메세지
         // 소문자로 정규화해서 비교하므로 ack:cmd 대기
         const ackStr = 'ack:' + cmd;
-        a;
         await waitForArduinoResponse(ackStr, { timeoutMs, silent: true });
     } catch (e) {
         console.warn(`ACK Timeout/Fail for command: ${cmd}`, e);
