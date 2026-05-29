@@ -832,16 +832,34 @@ const SENSOR_MAP = [
         label: (v) => (v.includes('Abnormal') ? '이상' : '정상'),
     },
     {
-        pattern: /Belt Light Sensor/i,
-        id: 'belt-switch',
-        state: (v) => (v.includes('Switch ON') ? 'active' : 'idle'),
-        label: (v) => (v.includes('Switch ON') ? 'ON' : 'OFF'),
-    },
-    {
         pattern: /Photo Sensor/i,
         id: 'photo',
         state: (v) => (v.includes('(Detected)') ? 'active' : 'idle'),
         label: (v) => (v.includes('(Detected)') ? '감지됨' : 'CLEAR'),
+    },
+    {
+        pattern: /MC12B Enable Sensor50/i,
+        id: 'enable50',
+        state: (v) => (v.includes('HIGH') ? 'ok' : 'idle'),
+        label: (v) => (v.includes('HIGH') ? 'ON' : 'OFF'),
+    },
+    {
+        pattern: /MC12B Enable Sensor51/i,
+        id: 'enable51',
+        state: (v) => (v.includes('HIGH') ? 'ok' : 'idle'),
+        label: (v) => (v.includes('HIGH') ? 'ON' : 'OFF'),
+    },
+    {
+        pattern: /Inverter REV Sensor/i,
+        id: 'inv-rev',
+        state: (v) => (v.includes('HIGH') ? 'active' : 'idle'),
+        label: (v) => (v.includes('HIGH') ? 'ACTIVE' : 'IDLE'),
+    },
+    {
+        pattern: /Inverter FWD Sensor/i,
+        id: 'inv-fwd',
+        state: (v) => (v.includes('HIGH') ? 'active' : 'idle'),
+        label: (v) => (v.includes('HIGH') ? 'ACTIVE' : 'IDLE'),
     },
     {
         pattern: /Login Status/i,
@@ -852,46 +870,6 @@ const SENSOR_MAP = [
 ];
 
 function handleSensorLine(line) {
-    // === 실시간 센서 변화 메시지 처리 (BELT_MANUAL 동작 중) ===
-    // "Belt Sensor (Pin 25) changed: HIGH (Normal) at 1234ms"
-    // "Belt Sensor (Pin 25) initial: HIGH (Normal)"
-    // "Belt Sensor (Pin 25) final: HIGH (Normal)"
-    if (line.includes('Belt Sensor (Pin 25)')) {
-        const colonIdx = line.lastIndexOf(':');
-        if (colonIdx !== -1) {
-            // "HIGH (Normal) at 1234ms" 또는 "HIGH (Normal)" 형식
-            const valueText = line
-                .slice(colonIdx + 1)
-                .trim()
-                .split(' at ')[0]; // " at 1234ms" 제거
-            const isHigh = valueText.includes('HIGH');
-            const st = isHigh ? 'ok' : 'warn';
-            const lbl = isHigh ? '정상' : '이상';
-
-            const dot = document.getElementById('sd-belt');
-            const val = document.getElementById('sv-belt');
-            if (dot) {
-                dot.className = 'sensor-dot ' + st;
-                // 실시간 변화 시각적 효과 (깜빡임)
-                dot.style.transition = 'none';
-                dot.style.opacity = '0.3';
-                setTimeout(() => {
-                    dot.style.transition = 'all 0.3s';
-                    dot.style.opacity = '1';
-                }, 50);
-            }
-            if (val) {
-                val.textContent = lbl;
-                val.className = 'sensor-value ' + st;
-            }
-
-            // 타임스탬프 업데이트
-            updateSensorTimestamp();
-            return;
-        }
-    }
-
-    // === 기존 센서 상태 블록 처리 (GET_STATUS 응답) ===
     for (const entry of SENSOR_MAP) {
         if (entry.pattern.test(line)) {
             const colonIdx = line.indexOf(':');
@@ -976,6 +954,170 @@ if (!('serial' in navigator)) {
 const DEV_FLAG = 'petmon.deviceMaintenance';
 const GBL_FLAG = 'petmon.globalMaintenance';
 const CBL_FLAG = 'petmon.Collection';
+const EQUIPMENT_STATUS_API_URL = 'https://petmon.ai.kr/api/device/equipment-status';
+let cachedDeviceApiConfig = null;
+
+function normalizeApiValue(value) {
+    return String(value || '').trim();
+}
+
+function readConfigValue(obj, keys) {
+    if (!obj || typeof obj !== 'object') return '';
+    for (const key of keys) {
+        if (obj[key]) return normalizeApiValue(obj[key]);
+    }
+    return '';
+}
+
+function parseIniConfig(text) {
+    const config = {};
+    String(text || '')
+        .split(/\r?\n/)
+        .forEach((line) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';') || trimmed.startsWith('[')) return;
+            const match = trimmed.match(/^([^=:#\s]+)\s*(?:[=:]|\s+)\s*(.+)$/);
+            if (match) config[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
+        });
+    return config;
+}
+
+function readFromStorage(keys) {
+    for (const key of keys) {
+        const value = normalizeApiValue(localStorage.getItem(key) || sessionStorage.getItem(key));
+        if (value) return value;
+    }
+    return '';
+}
+
+function applyIniToDeviceApiConfig(config, ini) {
+    config.device =
+        config.device ||
+        readConfigValue(ini, [
+            'petmon.device',
+            'petmon.deviceCode',
+            'petmon.device_code',
+            'device',
+            'deviceCode',
+            'device_code',
+            'equipment_id',
+        ]);
+    config.group_cd =
+        config.group_cd || readConfigValue(ini, ['petmon.group_cd', 'petmon.groupCd', 'group_cd', 'groupCd', 'group']);
+    config.branch = config.branch || readConfigValue(ini, ['petmon.branch', 'branch', 'branchName', 'name']);
+}
+
+async function loadDeviceApiConfig() {
+    if (cachedDeviceApiConfig) return cachedDeviceApiConfig;
+
+    const params = new URLSearchParams(window.location.search || '');
+    const config = {
+        device:
+            normalizeApiValue(params.get('device')) ||
+            normalizeApiValue(params.get('equipment_id')) ||
+            readConfigValue(window.deviceConfig, ['deviceCode', 'device_code', 'device', 'equipment_id']) ||
+            readConfigValue(window.PETMON_CONFIG, ['deviceCode', 'device_code', 'device', 'equipment_id']) ||
+            normalizeApiValue(window.PETMON_DEVICE_CODE),
+        group_cd:
+            normalizeApiValue(params.get('group_cd')) ||
+            normalizeApiValue(params.get('group')) ||
+            readConfigValue(window.deviceConfig, ['groupCd', 'group_cd', 'group']) ||
+            readConfigValue(window.PETMON_CONFIG, ['groupCd', 'group_cd', 'group']) ||
+            normalizeApiValue(window.PETMON_GROUP_CD),
+        branch:
+            readConfigValue(window.deviceConfig, ['branch', 'branchName']) ||
+            readConfigValue(window.PETMON_CONFIG, ['branch', 'branchName']) ||
+            normalizeApiValue(window.PETMON_BRANCH),
+    };
+
+    try {
+        if (window.electronAPI && typeof window.electronAPI.readPetmonIni === 'function') {
+            const iniText = await window.electronAPI.readPetmonIni();
+            if (iniText) {
+                applyIniToDeviceApiConfig(config, parseIniConfig(iniText));
+            }
+        }
+    } catch {}
+
+    if (!config.device) {
+        for (const path of ['./petmon.ini', '../petmon.ini', './config.ini', '../config.ini']) {
+            try {
+                const response = await fetch(path, { cache: 'no-store' });
+                if (!response.ok) continue;
+                applyIniToDeviceApiConfig(config, parseIniConfig(await response.text()));
+                if (config.device) break;
+            } catch {}
+        }
+    }
+
+    try {
+        config.device =
+            config.device ||
+            readFromStorage([
+                'petmon.device',
+                'petmon.deviceCode',
+                'petmon.device_code',
+                'device',
+                'deviceCode',
+                'device_code',
+                'equipment_id',
+            ]);
+        config.group_cd =
+            config.group_cd || readFromStorage(['petmon.group_cd', 'petmon.groupCd', 'group_cd', 'groupCd', 'group']);
+        config.branch = config.branch || readFromStorage(['petmon.branch', 'branch', 'branchName']);
+    } catch {}
+
+    config.device = normalizeApiValue(config.device).toUpperCase();
+    config.group_cd = normalizeApiValue(config.group_cd) || 'etc';
+
+    try {
+        if (config.device) localStorage.setItem('petmon.device', config.device);
+        if (config.group_cd) localStorage.setItem('petmon.group_cd', config.group_cd);
+        if (config.branch) localStorage.setItem('petmon.branch', normalizeApiValue(config.branch));
+    } catch {}
+
+    if (config.branch) {
+        const branchNameEl = document.getElementById('branch-name');
+        if (branchNameEl) branchNameEl.textContent = config.branch;
+    }
+
+    cachedDeviceApiConfig = config;
+    return config;
+}
+
+function newEquipmentStatusRequestId() {
+    return `ADMIN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+async function sendEquipmentStatus(status) {
+    try {
+        const config = await loadDeviceApiConfig();
+        if (!config.device) {
+            appendLog('equipment status API skipped: device code not found', 'err');
+            return;
+        }
+
+        const response = await fetch(EQUIPMENT_STATUS_API_URL, {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                device: config.device,
+                group_cd: config.group_cd,
+                client_unique_id: newEquipmentStatusRequestId(),
+                status: String(status),
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || (data.status && String(data.status).toLowerCase() !== 'success')) {
+            appendLog(`equipment status API failed: ${response.status} ${data.message || ''}`.trim(), 'err');
+            return;
+        }
+        appendLog(`equipment status API sent: ${config.device} status=${status}`, 'tx');
+    } catch (error) {
+        appendLog(`equipment status API error: ${error.message || error}`, 'err');
+    }
+}
 
 // 변경사항: 상태 변경 브로드캐스트 유틸
 function broadcastMaintChange() {
@@ -1005,6 +1147,12 @@ function isGlobalMaintOn() {
 
 function isCollectionModeOn() {
     return sessionStorage.getItem(CBL_FLAG) === '1';
+}
+
+function getCurrentAdminEquipmentStatus() {
+    if (isCollectionModeOn()) return 3;
+    if (isDeviceMaintOn() || isGlobalMaintOn()) return 2;
+    return 1;
 }
 
 function setStatus(el, text, cls) {
@@ -1069,27 +1217,30 @@ function setDeviceMaintenance(on) {
     reflectMaintButtons();
     // 변경 알림
     broadcastMaintChange();
+    sendEquipmentStatus(getCurrentAdminEquipmentStatus());
 }
 
-function setGlobalMaintenance(on) {
+async function setGlobalMaintenance(on) {
     try {
         sessionStorage.setItem(GBL_FLAG, on ? '1' : '0');
     } catch {}
     reflectMaintButtons();
     // 변경 알림
     broadcastMaintChange();
+    await sendEquipmentStatus(getCurrentAdminEquipmentStatus());
     if (on) {
         // 전체 점검 켜면 안내 페이지로 이동
         window.location.href = '../maintenance.html';
     }
 }
 
-function setCollectionMode(on) {
+async function setCollectionMode(on) {
     try {
         sessionStorage.setItem(CBL_FLAG, on ? '1' : '0');
     } catch {}
     reflectMaintButtons();
     broadcastMaintChange();
+    await sendEquipmentStatus(getCurrentAdminEquipmentStatus());
     if (on) {
         window.location.href = '../collection.html';
     }

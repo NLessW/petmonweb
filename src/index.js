@@ -62,8 +62,9 @@ let __testMode = false;
 let __errorShownOnce = false;
 
 // 세션용 유틸/상수
-const MEMBER_API_URL = 'https://petcycle.mycafe24.com/member_api.php';
-const POINT_API_URL = 'https://petcycle.mycafe24.com/point_api.php';
+const MEMBER_API_URL = 'https://petmon.ai.kr/api/device/member-check';
+const POINT_API_URL = 'https://petmon.ai.kr/api/device/point-input';
+const EQUIPMENT_STATUS_API_URL = 'https://petmon.ai.kr/api/device/equipment-status';
 
 /** 테스트 모드 표시 */
 function updateTestBadge() {
@@ -106,6 +107,63 @@ function newClientUniqueId() {
 }
 function getGroupCode() {
     return deviceConfig?.groupCode || localStorage.getItem('petmon.group_cd') || 'etc';
+}
+
+function getDeviceCodeForApi() {
+    return String(deviceConfig?.deviceCode || localStorage.getItem('petmon.device') || 'UNKNOWN')
+        .trim()
+        .toUpperCase();
+}
+
+async function callEquipmentStatusApi({ status }) {
+    if (__testMode) {
+        return Promise.resolve({ status: 'success', test: true, device: getDeviceCodeForApi() });
+    }
+
+    const payload = {
+        device: getDeviceCodeForApi(),
+        group_cd: getGroupCode() || 'etc',
+        client_unique_id: newClientUniqueId(),
+    };
+
+    if (status != null) payload.status = String(status);
+
+    try {
+        const response = await fetch(EQUIPMENT_STATUS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const text = await response.text();
+        let parsed;
+        try {
+            parsed = text ? JSON.parse(text) : null;
+        } catch {
+            parsed = text;
+        }
+
+        if (!response.ok) {
+            const errMsg = parsed && parsed.message ? parsed.message : `HTTP 오류: ${response.status}`;
+            throw new Error(errMsg);
+        }
+
+        return parsed;
+    } catch (error) {
+        console.error('기기 상태 API 호출 실패:', error);
+        return null;
+    }
+}
+
+async function markEquipmentInUse() {
+    return callEquipmentStatusApi({ status: 4 });
+}
+
+async function markEquipmentNormal() {
+    return callEquipmentStatusApi({ status: 1 });
+}
+
+async function markEquipmentMaintenance() {
+    return callEquipmentStatusApi({ status: 2 });
 }
 
 // 모달 생성 및 표시
@@ -327,6 +385,7 @@ async function writeCmdWithAck(cmd, timeoutMs = 3000) {
         // ACK:CMD 또는 NACK:CMD:... 형태 응답 메세지
         // 소문자로 정규화해서 비교하므로 ack:cmd 대기
         const ackStr = 'ack:' + cmd;
+        a;
         await waitForArduinoResponse(ackStr, { timeoutMs, silent: true });
     } catch (e) {
         console.warn(`ACK Timeout/Fail for command: ${cmd}`, e);
@@ -393,7 +452,26 @@ function rememberPreferred(port) {
 //   branch=연구소
 //   group_cd=suwon
 async function loadDeviceConfig() {
-    // 1) localStorage 저장값 사용
+    // 1) Electron preload를 통해 C:\petmon.ini 직접 읽기
+    try {
+        if (window?.electronAPI?.readPetmonIni) {
+            const text = await window.electronAPI.readPetmonIni();
+            const parsed = parseIniText(text);
+            if (parsed.branchName || parsed.deviceCode || parsed.groupCode) {
+                deviceConfig = {
+                    deviceCode: parsed.deviceCode || deviceConfig.deviceCode,
+                    branchName: parsed.branchName || deviceConfig.branchName,
+                    groupCode: parsed.groupCode || deviceConfig.groupCode,
+                };
+                if (branchNameSpan && deviceConfig.branchName) branchNameSpan.textContent = deviceConfig.branchName;
+                if (deviceConfig.groupCode) localStorage.setItem('petmon.group_cd', deviceConfig.groupCode);
+                if (deviceConfig.deviceCode) localStorage.setItem('petmon.device', deviceConfig.deviceCode);
+                if (deviceConfig.branchName) localStorage.setItem('petmon.branch', deviceConfig.branchName);
+                return;
+            }
+        }
+    } catch {}
+    // 2) localStorage 저장값 사용
     try {
         const lsBranch = localStorage.getItem('petmon.branch');
         const lsDevice = localStorage.getItem('petmon.device');
@@ -430,19 +508,7 @@ async function loadDeviceConfig() {
             const res = await fetch(url, { cache: 'no-store' });
             if (!res.ok) continue;
             const text = await res.text();
-            const lines = text.split(/\r?\n/);
-            const out = { deviceCode: undefined, branchName: undefined, groupCode: undefined };
-            for (const raw of lines) {
-                const line = raw.trim();
-                if (!line || line.startsWith('#') || line.startsWith(';')) continue;
-                const m = line.match(/^([^=:#]+)\s*[:=]\s*(.*)$/);
-                if (!m) continue;
-                const key = m[1].trim().toLowerCase();
-                const val = m[2].trim();
-                if (key === 'device' || key === 'devicecode' || key === 'code') out.deviceCode = val;
-                if (key === 'branch' || key === 'branchname' || key === 'name') out.branchName = val;
-                if (key === 'group_cd' || key === 'group' || key === 'groupcode') out.groupCode = val;
-            }
+            const out = parseIniText(text);
             if (out.branchName || out.deviceCode || out.groupCode) {
                 deviceConfig = out;
                 if (branchNameSpan && out.branchName) branchNameSpan.textContent = out.branchName;
@@ -464,13 +530,14 @@ function parseIniText(text) {
     for (const raw of lines) {
         const line = (raw || '').trim();
         if (!line || line.startsWith('#') || line.startsWith(';')) continue;
-        const m = line.match(/^([^=:#]+)\s*[:=]\s*(.*)$/);
+        const m = line.match(/^([^=:#\s]+)\s*(?:[:=]|\s)\s*(.*)$/);
         if (!m) continue;
         const key = m[1].trim().toLowerCase();
         const val = m[2].trim();
-        if (key === 'device' || key === 'devicecode' || key === 'code') out.deviceCode = val;
-        if (key === 'branch' || key === 'branchname' || key === 'name') out.branchName = val;
-        if (key === 'group_cd' || key === 'group' || key === 'groupcode') out.groupCode = val;
+        if (key === 'petmon.device' || key === 'device' || key === 'devicecode' || key === 'code') out.deviceCode = val;
+        if (key === 'petmon.branch' || key === 'branch' || key === 'branchname' || key === 'name') out.branchName = val;
+        if (key === 'petmon.group_cd' || key === 'group_cd' || key === 'group' || key === 'groupcode')
+            out.groupCode = val;
     }
     return out;
 }
@@ -880,12 +947,12 @@ async function callPointApi(mobileWithHyphens, count) {
     if (__testMode) {
         return Promise.resolve({ status: 'ok', test: true, mobile: mobileWithHyphens, input_cnt: count });
     }
-    // petcycle 도메인 + JSON 방식 + unique key + group_cd 포함
+    // petmon 도메인 + JSON 방식 + unique key + group_cd 포함
     const apiUrl = POINT_API_URL;
     const payload = {
         mobile: String(mobileWithHyphens || ''),
         input_cnt: Number(count),
-        device: deviceConfig.deviceCode || 'UNKNOWN',
+        device: getDeviceCodeForApi(),
         group_cd: getGroupCode() || 'etc',
         client_unique_id: newClientUniqueId(),
     };
@@ -921,7 +988,7 @@ async function callMemberApi(mobileWithHyphens) {
     const apiUrl = MEMBER_API_URL;
     const payload = {
         mobile: String(mobileWithHyphens || ''),
-        device: deviceConfig.deviceCode || 'UNKNOWN',
+        device: getDeviceCodeForApi(),
         group_cd: getGroupCode() || 'etc',
         client_unique_id: newClientUniqueId(),
     };
@@ -954,24 +1021,18 @@ async function finalizeAndReturnHome() {
             // callPointApi는 unique key + group_cd 포함해 전송
             result = await callPointApi(currentPhoneNumber, depositCount);
             if (result && result.status === 'error') {
-                const logLineErr = `[${nowTs()}] RESULT=ERROR device=${
-                    deviceConfig.deviceCode || 'UNKNOWN'
-                } mobile=${currentPhoneNumber} count=${depositCount} msg=${
+                const logLineErr = `[${nowTs()}] RESULT=ERROR device=${getDeviceCodeForApi()} mobile=${currentPhoneNumber} count=${depositCount} msg=${
                     (result && (result.message || result)) || ''
                 }`;
                 appendPointLog(logLineErr);
                 console.error('포인트 API 응답 오류:', result.message || result);
             } else {
-                const logLineOk = `[${nowTs()}] RESULT=OK device=${
-                    deviceConfig.deviceCode || 'UNKNOWN'
-                } mobile=${currentPhoneNumber} count=${depositCount} raw=${JSON.stringify(result)}`;
+                const logLineOk = `[${nowTs()}] RESULT=OK device=${getDeviceCodeForApi()} mobile=${currentPhoneNumber} count=${depositCount} raw=${JSON.stringify(result)}`;
                 appendPointLog(logLineOk);
             }
         }
     } catch (err) {
-        const logLineEx = `[${nowTs()}] RESULT=EXCEPTION device=${
-            deviceConfig.deviceCode || 'UNKNOWN'
-        } mobile=${currentPhoneNumber} count=${depositCount} error=${(err && (err.message || err)) || ''}`;
+        const logLineEx = `[${nowTs()}] RESULT=EXCEPTION device=${getDeviceCodeForApi()} mobile=${currentPhoneNumber} count=${depositCount} error=${(err && (err.message || err)) || ''}`;
         appendPointLog(logLineEx);
         console.error('포인트 적립 중 예외 발생:', err);
     } finally {
@@ -1029,6 +1090,12 @@ function showScreen(screenId) {
                 } catch (e) {
                     console.error('메인 화면 복귀 시 STOP 전송 실패:', e);
                 }
+            }
+
+            if (window?.__hardLock || window?.__maintenanceMode || __errorShownOnce) {
+                await markEquipmentMaintenance();
+            } else {
+                await markEquipmentNormal();
             }
 
             // 테스트 모드 시 잔여 큐 비우기
@@ -1313,6 +1380,7 @@ function showErrorScreen(message) {
     // 에러 스크린 한 번만 표시하도록 함
     if (__errorShownOnce) return;
     __errorShownOnce = true;
+    markEquipmentMaintenance();
 
     try {
         clearTimeout(errorAutoTimer);
@@ -1874,6 +1942,7 @@ async function startProcess() {
 
     // 문 열림 안내
     const openMsg = `투입구가 열립니다.<br>띠를 제거한 페트병을 <strong style="color: yellow;">병목</strong>부터 투입해주세요.<br>마지막으로 닫기 버튼을 눌러주세요.`;
+    markEquipmentInUse();
     renderOpenDoorOriginal(openMsg);
 
     // "작동중지" 버튼 옆에 "닫힘" 버튼 추가

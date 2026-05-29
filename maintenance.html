@@ -160,6 +160,7 @@
 
         <!-- PIN 및 부가 스크립트 -->
         <script src="./src/adminPin.js"></script>
+        <script src="./src/equipmentStatusRelease.js"></script>
         <script src="./src/hotkeys.js"></script>
         <script>
             (function () {
@@ -169,6 +170,9 @@
                         if (typeof window.requireAdminPin === 'function') {
                             const ok = await window.requireAdminPin();
                             if (ok) {
+                                if (typeof window.releaseEquipmentToNormal === 'function') {
+                                    await window.releaseEquipmentToNormal();
+                                }
                                 // 관리자 페이지로 이동하여 점검 해제/설정 토글 가능
                                 window.location.href = './src/adminManage.html';
                             }
