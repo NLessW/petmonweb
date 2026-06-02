@@ -2985,7 +2985,7 @@ loginSubmit.addEventListener('click', async () => {
 
         // FAIL 이거나 처음 사용 시 전화번호 재확인 팝업
         const firstUseMsg = 'PETMON에 처음 사용하시는 회원입니다. 전화번호를 확인하기 위해 한번더 입력 부탁드립니다';
-        if (member?.status === 'FAIL' && String(member?.message || '').includes('처음 사용')) {
+        if (member?.status === 'FAIL' && String(member?.message || '').includes('미가입')) {
             showConfirmModal({
                 title: '전화번호 확인',
                 lines: [`입력하신 전화번호: <b>${phone}</b>`, '이 전화번호가 맞습니까?'],
