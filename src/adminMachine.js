@@ -1106,6 +1106,7 @@ async function sendEquipmentStatus(status) {
                 group_cd: config.group_cd,
                 client_unique_id: newEquipmentStatusRequestId(),
                 status: String(status),
+                reset_collect_amount: false,
             }),
         });
         const data = await response.json().catch(() => ({}));
